@@ -17,8 +17,9 @@ const config: CapacitorConfig = {
       style: 'light',
       resizeOnFullScreen: true,
     },
+    // 'LIGHT' style = dark text for light backgrounds (we have a #FAF8FF bg).
     StatusBar: {
-      style: 'dark',
+      style: 'LIGHT',
       backgroundColor: '#FAF8FF',
     },
   },

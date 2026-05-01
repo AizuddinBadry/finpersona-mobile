@@ -7,6 +7,7 @@
  * Finpersona-mobile-build/screens-1.jsx mockup.
  */
 import type { CatIconName } from '@/components/CatIcon';
+import type { IconName } from '@/components/Icon';
 
 export type AiPersona = 'Analyst' | 'Coach' | 'Witty';
 
@@ -699,4 +700,132 @@ export const insightsMock: InsightsMock = {
     pace: 3420,
     capped: 3200,
   },
+};
+
+export type RewardItem = {
+  id: string;
+  name: string;
+  pts: number;
+  brandColor: string;
+  icon: IconName;
+  sub?: string;
+};
+
+export type RewardsRecent = {
+  id: string;
+  merchant: string;
+  pts: number;
+  category: string;
+  icon: CatIconName;
+  bonus?: string;
+};
+
+export type RewardsMock = {
+  balancePts: number;
+  redeemableMyr: number;
+  tier: {
+    name: string;
+    next: string;
+    progressPct: number; // 0..100
+    pointsToNext: number;
+    nextMultiplier: number;
+  };
+  streak: {
+    days: number;
+    receiptsThisWeek: number;
+    receiptGoal: number;
+  };
+  multiplier: {
+    label: string;
+    value: number;
+  };
+  redeem: RewardItem[];
+  recent: RewardsRecent[];
+  footnote: string;
+};
+
+export const rewardsMock: RewardsMock = {
+  balancePts: 4520,
+  redeemableMyr: 45.2,
+  tier: {
+    name: 'Sapphire',
+    next: 'Amethyst',
+    progressPct: 68,
+    pointsToNext: 480,
+    nextMultiplier: 1.5,
+  },
+  streak: {
+    days: 12,
+    receiptsThisWeek: 5,
+    receiptGoal: 7,
+  },
+  multiplier: {
+    label: 'LHDN',
+    value: 2,
+  },
+  redeem: [
+    {
+      id: 'grab',
+      name: 'GrabFood RM 25',
+      pts: 2500,
+      brandColor: '#00B14F',
+      icon: 'food',
+    },
+    {
+      id: 'shopee',
+      name: 'Shopee RM 50',
+      pts: 4800,
+      brandColor: '#EE4D2D',
+      icon: 'bag',
+    },
+    {
+      id: 'petronas',
+      name: 'Petronas RM 30',
+      pts: 3000,
+      brandColor: '#00A04E',
+      icon: 'car',
+    },
+    {
+      id: 'cash',
+      name: 'Cash to Maybank',
+      pts: 5000,
+      brandColor: '#FFCC00',
+      icon: 'bank',
+      sub: 'RM 50 to •• 4218',
+    },
+  ],
+  recent: [
+    {
+      id: 'e1',
+      merchant: 'Kinokuniya KLCC',
+      pts: 142,
+      category: 'LHDN · Lifestyle',
+      icon: 'book',
+      bonus: '2× LHDN',
+    },
+    {
+      id: 'e2',
+      merchant: 'Klinik Mediviron',
+      pts: 170,
+      category: 'LHDN · Medical',
+      icon: 'medical',
+      bonus: '2× LHDN',
+    },
+    {
+      id: 'e3',
+      merchant: 'Shell Bangsar',
+      pts: 60,
+      category: 'Transport',
+      icon: 'car',
+    },
+    {
+      id: 'e4',
+      merchant: "Mama's Kitchen",
+      pts: 24,
+      category: 'Dining',
+      icon: 'food',
+    },
+  ],
+  footnote:
+    '1 pt per RM spent · 2× when tagged claimable · streaks add bonus pts weekly.',
 };

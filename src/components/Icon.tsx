@@ -14,7 +14,13 @@ export type IconName =
   | 'receipt'
   | 'lock'
   | 'user'
-  | 'shield';
+  | 'shield'
+  | 'home'
+  | 'chart'
+  | 'camera'
+  | 'cards'
+  | 'bot'
+  | 'plus';
 
 type Props = {
   name: IconName;
@@ -79,6 +85,40 @@ export function Icon({
       <g {...stroke}>
         <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z" />
         <path d="M9 12l2 2 4-4" />
+      </g>
+    ),
+    home: (
+      <path
+        {...stroke}
+        d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1v-9z"
+      />
+    ),
+    chart: (
+      <g {...stroke}>
+        <path d="M4 20V10M10 20V4M16 20V14M22 20H2" />
+      </g>
+    ),
+    camera: (
+      <g {...stroke}>
+        <path d="M4 8h3l2-2h6l2 2h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" />
+        <circle cx="12" cy="13" r="3.5" />
+      </g>
+    ),
+    cards: (
+      <g {...stroke}>
+        <rect x="2" y="6" width="20" height="13" rx="2.5" />
+        <path d="M2 10h20M6 15h3" />
+      </g>
+    ),
+    bot: (
+      <g {...stroke}>
+        <rect x="4" y="7" width="16" height="13" rx="3" />
+        <path d="M12 4v3M9 13h.01M15 13h.01M9 17h6" />
+      </g>
+    ),
+    plus: (
+      <g {...stroke}>
+        <path d="M12 5v14M5 12h14" />
       </g>
     ),
   };

@@ -127,7 +127,12 @@ export const homeMock: HomeMock = {
  * Finpersona-mobile-build/screens-2.jsx. Shape supports filtering by
  * day-group and category chip; non-MYR txns carry a converted MYR figure.
  */
-export type ActivityDayKey = 'today' | 'yesterday' | 'sat26';
+/**
+ * Day-bucket id used to join transactions to their group label. Defined as
+ * a free string so live data can use ISO dates ('2026-05-01') while the
+ * static mock keeps its 'today' / 'yesterday' / 'sat26' literals.
+ */
+export type ActivityDayKey = string;
 
 export type ActivityTxn = {
   id: string;

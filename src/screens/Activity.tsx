@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { CatIcon } from '@/components/CatIcon';
 import { activityMock } from '@/mocks/seed';
+import { useActivity } from '@/hooks/useActivity';
 
 const FILTERS = ['All', 'LHDN', 'Food', 'Transport', 'Medical', 'Books'] as const;
 type Filter = (typeof FILTERS)[number];
@@ -35,7 +36,9 @@ function formatForeign(currency: 'SGD' | 'USD', amount: number): string {
 
 export default function Activity() {
   const [active, setActive] = useState<Filter>('All');
-  const { summary, transactions, groups } = activityMock;
+  // Live data from supabase; falls back to the mock while loading or signed out.
+  const { data = activityMock } = useActivity();
+  const { summary, transactions, groups } = data;
 
   return (
     <div className="text-ink" style={{ paddingBottom: 110 }}>

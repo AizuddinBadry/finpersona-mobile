@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase/client';
+import { signInWithApple } from './apple-sign-in';
 
 const Schema = z.object({
   email: z.string().email('Invalid email'),
@@ -31,6 +32,16 @@ export default function LoginScreen() {
   };
 
   const showApple = Capacitor.getPlatform() === 'ios';
+
+  const onApple = async () => {
+    setSubmitErr(null);
+    const { error } = await signInWithApple();
+    if (error) {
+      setSubmitErr(error);
+      return;
+    }
+    nav('/', { replace: true });
+  };
 
   return (
     <div className="flex min-h-screen flex-col justify-center bg-grad-mist px-6">
@@ -87,7 +98,7 @@ export default function LoginScreen() {
           <button
             type="button"
             className="mt-3 w-full rounded-md border border-ink py-3 text-sm font-semibold text-ink"
-            onClick={() => alert('Apple Sign-In wired in Phase 1 Task 14')}
+            onClick={onApple}
           >
             Sign in with Apple
           </button>

@@ -3,7 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase/client';
+import { signInWithApple } from './apple-sign-in';
 
 const Schema = z
   .object({
@@ -38,6 +40,18 @@ export default function SignupScreen() {
       return;
     }
     nav('/onboarding', { replace: true });
+  };
+
+  const showApple = Capacitor.getPlatform() === 'ios';
+
+  const onApple = async () => {
+    setSubmitErr(null);
+    const { error } = await signInWithApple();
+    if (error) {
+      setSubmitErr(error);
+      return;
+    }
+    nav('/', { replace: true });
   };
 
   return (
@@ -124,6 +138,16 @@ export default function SignupScreen() {
             {formState.isSubmitting ? 'Creating account…' : 'Create account'}
           </button>
         </form>
+
+        {showApple && (
+          <button
+            type="button"
+            className="mt-3 w-full rounded-md border border-ink py-3 text-sm font-semibold text-ink"
+            onClick={onApple}
+          >
+            Sign up with Apple
+          </button>
+        )}
 
         <p className="mt-8 text-center text-sm text-muted">
           Already have an account?{' '}

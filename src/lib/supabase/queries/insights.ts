@@ -1,0 +1,180 @@
+/**
+ * Insights screen query — aggregates receipts month-over-month into the
+ * InsightsMock shape Phase 2's Insights.tsx renders. Only the Month period
+ * is wired live; Week/Year still toggle UI only and fall back to the same
+ * Month aggregation for now (Phase 4 will add range-aware queries).
+ *
+ * Stays on insightsMock:
+ *   - bezier path strings (chart shape — no time-series data layer yet to
+ *     re-derive these from)
+ *   - axis labels (need point-bucket math to regenerate)
+ *   - forecast (AI output — not stored anywhere yet)
+ */
+import { supabase } from '@/lib/supabase/client';
+import type { InsightsCategory, InsightsMock } from '@/mocks/seed';
+import { insightsMock } from '@/mocks/seed';
+
+export type InsightsReceiptRow = {
+  id: string;
+  user_id: string;
+  total_amount: string | number;
+  category: string | null;
+  receipt_date: string;
+};
+
+// Category → display label + color. Falls back to a neutral purple when an
+// unknown category surfaces (e.g. user-defined free-text).
+const CATEGORY_VISUALS: Record<string, { label: string; color: string }> = {
+  food: { label: 'Dining', color: '#D97636' },
+  dining: { label: 'Dining', color: '#D97636' },
+  restaurant: { label: 'Dining', color: '#D97636' },
+  transport: { label: 'Transport', color: '#1E80B5' },
+  fuel: { label: 'Transport', color: '#1E80B5' },
+  shopping: { label: 'Shopping', color: '#6E4CE6' },
+  apparel: { label: 'Shopping', color: '#6E4CE6' },
+  bills: { label: 'Bills', color: '#1FB573' },
+  utilities: { label: 'Bills', color: '#1FB573' },
+  utility: { label: 'Bills', color: '#1FB573' },
+  coffee: { label: 'Coffee', color: '#956B3F' },
+  cafe: { label: 'Coffee', color: '#956B3F' },
+  medical: { label: 'Medical', color: '#D63440' },
+  health: { label: 'Medical', color: '#D63440' },
+  lifestyle: { label: 'Lifestyle', color: '#5837C9' },
+  books: { label: 'Lifestyle', color: '#5837C9' },
+};
+
+/**
+ * Map a free-text receipts.category onto a stable bucket id + label + color.
+ * Returns null when the category should be hidden from the breakdown
+ * (e.g. truly unknown — keeps the chart focused on the top 5 known buckets).
+ */
+function bucketFor(category: string | null): { id: string; label: string; color: string } | null {
+  if (!category) return null;
+  const c = category.toLowerCase();
+  // Direct keyword match first.
+  for (const key of Object.keys(CATEGORY_VISUALS)) {
+    if (c.includes(key)) {
+      const v = CATEGORY_VISUALS[key];
+      return { id: v.label.toLowerCase(), label: v.label, color: v.color };
+    }
+  }
+  return null;
+}
+
+export function monthRange(now: Date = new Date()): {
+  monthStart: string;
+  monthEnd: string;
+  prevStart: string;
+  prevEnd: string;
+  monthLabel: string;
+  prevLabel: string;
+} {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const monthStart = new Date(y, m, 1);
+  const monthEnd = new Date(y, m + 1, 1);
+  const prevStart = new Date(y, m - 1, 1);
+  const prevEnd = monthStart;
+  // Format in local time — toISOString() would shift to UTC and break the
+  // 1st-of-month boundary for users west of UTC.
+  const fmt = (d: Date) => {
+    const yy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+  };
+  const labelFmt = (d: Date) => d.toLocaleDateString('en-GB', { month: 'long' });
+  return {
+    monthStart: fmt(monthStart),
+    monthEnd: fmt(monthEnd),
+    prevStart: fmt(prevStart),
+    prevEnd: fmt(prevEnd),
+    monthLabel: labelFmt(monthStart),
+    prevLabel: labelFmt(prevStart),
+  };
+}
+
+export function shapeInsights(args: {
+  current: InsightsReceiptRow[];
+  previous: InsightsReceiptRow[];
+  monthLabel: string;
+  prevLabel: string;
+}): InsightsMock {
+  const { current, previous, monthLabel, prevLabel } = args;
+
+  const sum = (rs: InsightsReceiptRow[]) =>
+    rs.reduce((s, r) => s + Number(r.total_amount), 0);
+
+  const totalRm = Math.round(sum(current));
+  const prevTotalRm = Math.round(sum(previous));
+  const deltaPct = prevTotalRm > 0
+    ? Math.round(((totalRm - prevTotalRm) / prevTotalRm) * 100)
+    : 0;
+
+  // Aggregate current-month spend per visual bucket.
+  const buckets = new Map<string, { label: string; color: string; amount: number }>();
+  for (const r of current) {
+    const b = bucketFor(r.category);
+    if (!b) continue;
+    const prev = buckets.get(b.id) ?? { label: b.label, color: b.color, amount: 0 };
+    prev.amount += Number(r.total_amount);
+    buckets.set(b.id, prev);
+  }
+
+  // Top 5 buckets by amount; pct is relative to the largest.
+  const sorted = [...buckets.entries()]
+    .sort((a, b) => b[1].amount - a[1].amount)
+    .slice(0, 5);
+  const max = sorted[0]?.[1].amount ?? 0;
+  const categories: InsightsCategory[] = sorted.map(([id, v]) => ({
+    id,
+    label: v.label,
+    amount: Math.round(v.amount),
+    pct: max > 0 ? Math.round((v.amount / max) * 100) : 0,
+    color: v.color,
+  }));
+
+  return {
+    period: 'Month',
+    monthLabel,
+    totalRm,
+    deltaPct,
+    prevTotalRm,
+    prevLabel,
+    // Chart geometry stays on the mock — no time-series engine yet.
+    axis: insightsMock.axis,
+    pathCurrent: insightsMock.pathCurrent,
+    pathPrevious: insightsMock.pathPrevious,
+    areaCurrent: insightsMock.areaCurrent,
+    areaPrevious: insightsMock.areaPrevious,
+    categories: categories.length > 0 ? categories : insightsMock.categories,
+    forecast: insightsMock.forecast,
+  };
+}
+
+export async function fetchInsights(userId: string, now: Date = new Date()): Promise<InsightsMock> {
+  const range = monthRange(now);
+  const [curRes, prevRes] = await Promise.all([
+    supabase
+      .from('receipts')
+      .select('id, user_id, total_amount, category, receipt_date')
+      .eq('user_id', userId)
+      .gte('receipt_date', range.monthStart)
+      .lt('receipt_date', range.monthEnd),
+    supabase
+      .from('receipts')
+      .select('id, user_id, total_amount, category, receipt_date')
+      .eq('user_id', userId)
+      .gte('receipt_date', range.prevStart)
+      .lt('receipt_date', range.prevEnd),
+  ]);
+  if (curRes.error) throw curRes.error;
+  if (prevRes.error) throw prevRes.error;
+
+  return shapeInsights({
+    current: (curRes.data ?? []) as InsightsReceiptRow[],
+    previous: (prevRes.data ?? []) as InsightsReceiptRow[],
+    monthLabel: range.monthLabel,
+    prevLabel: range.prevLabel,
+  });
+}

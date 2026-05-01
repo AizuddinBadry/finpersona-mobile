@@ -11,6 +11,7 @@
  */
 import { useState } from 'react';
 import { Icon } from '@/components/Icon';
+import { useInsights } from '@/hooks/useInsights';
 import { insightsMock } from '@/mocks/seed';
 
 const PERIODS = ['Week', 'Month', 'Year'] as const;
@@ -22,6 +23,7 @@ const GRAD_INSIGHT =
   'linear-gradient(135deg, #F5F2FE, #EDE7FB)';
 
 export default function Insights() {
+  const { data = insightsMock } = useInsights();
   const {
     monthLabel,
     totalRm,
@@ -35,7 +37,7 @@ export default function Insights() {
     areaPrevious,
     categories,
     forecast,
-  } = insightsMock;
+  } = data;
   const [period, setPeriod] = useState<Period>('Month');
   const deltaIsNegative = deltaPct < 0;
   const deltaColor = deltaIsNegative ? '#1FB573' : '#D63440';

@@ -1,14 +1,23 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Insights from './Insights';
 
+// Signed-out: useInsights is disabled, screen falls back to insightsMock.
+vi.mock('@/hooks/useAuth', () => ({
+  useAuth: () => ({ user: null }),
+}));
+
 function renderInsights() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={['/insights']}>
-      <Insights />
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/insights']}>
+        <Insights />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

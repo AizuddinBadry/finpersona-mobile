@@ -289,3 +289,119 @@ export const activityMock: ActivityMock = {
     },
   ],
 };
+
+/**
+ * Cards screen mock — visual port of
+ * Finpersona-mobile-build/screens-3.jsx. Stack of bank cards, a move-money
+ * form fixture, and three auto-deduct rules with toggle defaults.
+ */
+export type CardItem = {
+  id: string;
+  name: string;
+  last4: string;
+  amount: string; // pre-formatted display string
+  currency: 'MYR' | 'SGD' | 'USD';
+  flag: string;
+  gradient: string;
+  primary?: boolean;
+};
+
+export type AutoDeductRule = {
+  id: string;
+  category: string;
+  from: string;
+  icon: CatIconName;
+  defaultEnabled: boolean;
+};
+
+export type CardsMock = {
+  cards: CardItem[];
+  move: {
+    fromName: string;
+    fromLast4: string;
+    fromCurrency: 'MYR';
+    toName: string;
+    toLast4: string;
+    toCurrency: 'SGD' | 'USD';
+    rateLabel: string;
+    amountMyr: string;
+    convertedLabel: string;
+  };
+  rules: AutoDeductRule[];
+};
+
+export const cardsMock: CardsMock = {
+  cards: [
+    {
+      id: 'c1',
+      name: 'Maybank Visa',
+      last4: '4218',
+      amount: '12,402.18',
+      currency: 'MYR',
+      flag: '🇲🇾',
+      gradient: 'linear-gradient(140deg, #5837C9 0%, #8E73F0 100%)',
+      primary: true,
+    },
+    {
+      id: 'c2',
+      name: 'CIMB Debit',
+      last4: '8801',
+      amount: '6,000.22',
+      currency: 'MYR',
+      flag: '🇲🇾',
+      gradient: 'linear-gradient(140deg, #1A1530 0%, #3A3458 100%)',
+    },
+    {
+      id: 'c3',
+      name: 'Wise Multi',
+      last4: '2240',
+      amount: '1,820.00',
+      currency: 'SGD',
+      flag: '🇸🇬',
+      gradient: 'linear-gradient(140deg, #1FB573 0%, #4DD7A0 100%)',
+    },
+    {
+      id: 'c4',
+      name: 'Wise Multi',
+      last4: '2240',
+      amount: '1,043.00',
+      currency: 'USD',
+      flag: '🇺🇸',
+      gradient: 'linear-gradient(140deg, #B57415 0%, #E89B2A 100%)',
+    },
+  ],
+  move: {
+    fromName: 'Maybank Visa',
+    fromLast4: '4218',
+    fromCurrency: 'MYR',
+    toName: 'Wise Multi · SGD',
+    toLast4: '2240',
+    toCurrency: 'SGD',
+    rateLabel: '1 MYR = 0.296 SGD',
+    amountMyr: '500.00',
+    convertedLabel: '≈ S$ 148.00',
+  },
+  rules: [
+    {
+      id: 'r1',
+      category: 'Dining & groceries',
+      from: 'Maybank Visa',
+      icon: 'food',
+      defaultEnabled: true,
+    },
+    {
+      id: 'r2',
+      category: 'Bills & subscriptions',
+      from: 'CIMB Debit',
+      icon: 'home2',
+      defaultEnabled: true,
+    },
+    {
+      id: 'r3',
+      category: 'Online shopping (USD)',
+      from: 'Wise USD',
+      icon: 'bag',
+      defaultEnabled: false,
+    },
+  ],
+};

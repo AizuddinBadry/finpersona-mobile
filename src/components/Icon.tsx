@@ -38,7 +38,9 @@ export type IconName =
   | 'bank'
   | 'filter'
   | 'download'
-  | 'search';
+  | 'search'
+  | 'repeat'
+  | 'settings';
 
 type Props = {
   name: IconName;
@@ -238,6 +240,17 @@ export function Icon({
       <g {...stroke}>
         <circle cx="11" cy="11" r="7" />
         <path d="M20 20l-3.5-3.5" />
+      </g>
+    ),
+    repeat: (
+      <g {...stroke}>
+        <path d="M17 2l4 4-4 4M3 11V9a4 4 0 014-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 01-4 4H3" />
+      </g>
+    ),
+    settings: (
+      <g {...stroke}>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
       </g>
     ),
   };

@@ -35,7 +35,10 @@ export type IconName =
   | 'car'
   | 'home2'
   | 'gift'
-  | 'bank';
+  | 'bank'
+  | 'filter'
+  | 'download'
+  | 'search';
 
 type Props = {
   name: IconName;
@@ -219,6 +222,22 @@ export function Icon({
     bank: (
       <g {...stroke}>
         <path d="M3 10l9-6 9 6v2H3zM5 12v6M9 12v6M15 12v6M19 12v6M3 19h18" />
+      </g>
+    ),
+    filter: (
+      <g {...stroke}>
+        <path d="M3 5h18M6 12h12M10 19h4" />
+      </g>
+    ),
+    download: (
+      <g {...stroke}>
+        <path d="M12 4v12M6 12l6 6 6-6M4 20h16" />
+      </g>
+    ),
+    search: (
+      <g {...stroke}>
+        <circle cx="11" cy="11" r="7" />
+        <path d="M20 20l-3.5-3.5" />
       </g>
     ),
   };

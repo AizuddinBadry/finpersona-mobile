@@ -1,0 +1,305 @@
+/**
+ * Activity — visual port of Finpersona-mobile-build/screens-2.jsx.
+ *
+ * Renders BETWEEN the StatusBar and BottomNav supplied by AppShell. Reached
+ * from Home's "See all" link. Filter chips are interactive (active class
+ * swaps on tap via aria-pressed) but don't actually filter the list — that's
+ * deferred until backend wiring lands. Data lives in src/mocks/seed.ts.
+ */
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Icon } from '@/components/Icon';
+import { CatIcon } from '@/components/CatIcon';
+import { activityMock } from '@/mocks/seed';
+
+const FILTERS = ['All', 'LHDN', 'Food', 'Transport', 'Medical', 'Books'] as const;
+type Filter = (typeof FILTERS)[number];
+
+function formatRm(amount: number): string {
+  const sign = amount < 0 ? '−' : amount > 0 ? '+' : '';
+  const abs = Math.abs(amount);
+  return `${sign}RM ${abs.toLocaleString('en-MY', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatForeign(currency: 'SGD' | 'USD', amount: number): string {
+  const sign = amount < 0 ? '−' : '+';
+  const symbol = currency === 'USD' ? '$' : 'S$';
+  return `${sign}${symbol}${Math.abs(amount).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+export default function Activity() {
+  const [active, setActive] = useState<Filter>('All');
+  const { summary, transactions, groups } = activityMock;
+
+  return (
+    <div className="text-ink" style={{ paddingBottom: 110 }}>
+      {/* Header */}
+      <div
+        className="flex items-center justify-between"
+        style={{ padding: '4px 20px 12px' }}
+      >
+        <div className="flex items-center" style={{ gap: 10 }}>
+          <Link
+            to="/"
+            aria-label="Back"
+            className="flex items-center justify-center bg-surface text-ink2 shadow-card"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              border: '0.5px solid rgba(91,71,168,0.10)',
+            }}
+          >
+            <Icon name="arrowLeft" size={17} color="#39314F" />
+          </Link>
+          <h1
+            className="text-ink"
+            style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.5 }}
+          >
+            Activity
+          </h1>
+        </div>
+        <div className="flex" style={{ gap: 8 }}>
+          {(['filter', 'download'] as const).map((n) => (
+            <button
+              key={n}
+              type="button"
+              aria-label={n === 'filter' ? 'Filter' : 'Download'}
+              className="flex items-center justify-center bg-surface shadow-card"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                border: '0.5px solid rgba(91,71,168,0.10)',
+              }}
+            >
+              <Icon name={n} size={17} color="#39314F" />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Search (visual only) */}
+      <div style={{ padding: '0 20px' }}>
+        <div
+          className="flex items-center bg-surface shadow-card"
+          style={{
+            gap: 8,
+            padding: '11px 14px',
+            borderRadius: 14,
+            border: '0.5px solid rgba(91,71,168,0.10)',
+          }}
+          aria-hidden
+        >
+          <Icon name="search" size={16} color="#7A7392" />
+          <span
+            className="font-medium text-faint"
+            style={{ fontSize: 14 }}
+          >
+            Search merchants, categories…
+          </span>
+        </div>
+      </div>
+
+      {/* Filter chips */}
+      <div
+        role="group"
+        aria-label="Transaction filters"
+        className="flex"
+        style={{
+          gap: 8,
+          padding: '12px 20px 4px',
+          overflowX: 'auto',
+        }}
+      >
+        {FILTERS.map((f) => {
+          const isActive = active === f;
+          return (
+            <button
+              key={f}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => setActive(f)}
+              className="font-semibold"
+              style={{
+                padding: '7px 14px',
+                borderRadius: 999,
+                fontSize: 12,
+                background: isActive ? '#1A1530' : '#FFFFFF',
+                color: isActive ? '#FFFFFF' : '#39314F',
+                border: isActive
+                  ? 'none'
+                  : '0.5px solid rgba(91,71,168,0.10)',
+                boxShadow: isActive
+                  ? 'none'
+                  : '0 6px 18px rgba(60,40,140,0.06)',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                cursor: 'pointer',
+              }}
+            >
+              {f}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Summary band */}
+      <div style={{ padding: '12px 16px 0' }}>
+        <div
+          className="flex"
+          style={{
+            padding: '14px 16px',
+            borderRadius: 16,
+            background: '#F1ECFB',
+            justifyContent: 'space-between',
+          }}
+        >
+          {(
+            [
+              { l: 'In', v: formatRm(summary.in), c: '#1FB573', align: 'left' as const },
+              { l: 'Out', v: formatRm(summary.out), c: '#1A1530', align: 'center' as const },
+              { l: 'LHDN', v: formatRm(summary.lhdn), c: '#5837C9', align: 'right' as const },
+            ]
+          ).map((s) => (
+            <div key={s.l} style={{ flex: 1, textAlign: s.align }}>
+              <div
+                className="font-semibold text-muted"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: 0.4,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {s.l}
+              </div>
+              <div
+                style={{
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: s.c,
+                  fontVariantNumeric: 'tabular-nums',
+                  letterSpacing: -0.3,
+                  marginTop: 2,
+                }}
+              >
+                {s.v}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Grouped transactions */}
+      <div style={{ padding: '16px 16px 0' }}>
+        {groups.map((g) => {
+          const items = transactions.filter((t) => t.day === g.key);
+          if (items.length === 0) return null;
+          return (
+            <div key={g.key} style={{ marginBottom: 16 }}>
+              <div
+                className="font-bold text-muted"
+                style={{
+                  fontSize: 11,
+                  letterSpacing: 0.5,
+                  textTransform: 'uppercase',
+                  padding: '0 4px 8px',
+                }}
+              >
+                {g.label}
+              </div>
+              <div
+                className="bg-surface shadow-card"
+                style={{
+                  borderRadius: 16,
+                  border: '0.5px solid rgba(91,71,168,0.10)',
+                  overflow: 'hidden',
+                }}
+              >
+                {items.map((t, i) => {
+                  const isIncome = t.amount > 0;
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex items-center"
+                      style={{
+                        gap: 12,
+                        padding: '13px 14px',
+                        borderBottom:
+                          i < items.length - 1
+                            ? '0.5px solid rgba(91,71,168,0.08)'
+                            : 'none',
+                      }}
+                    >
+                      <CatIcon name={t.icon} size={40} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="flex items-center" style={{ gap: 6 }}>
+                          <span
+                            className="font-semibold text-ink"
+                            style={{ fontSize: 14, letterSpacing: -0.2 }}
+                          >
+                            {t.name}
+                          </span>
+                          {t.lhdn && (
+                            <span
+                              style={{
+                                fontSize: 9,
+                                fontWeight: 700,
+                                color: '#5837C9',
+                                background: '#E8DFFB',
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                letterSpacing: 0.3,
+                              }}
+                            >
+                              LHDN
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className="text-muted"
+                          style={{ fontSize: 11, marginTop: 2 }}
+                        >
+                          {t.category} · {t.time}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                            fontVariantNumeric: 'tabular-nums',
+                            color: isIncome ? '#1FB573' : '#1A1530',
+                            letterSpacing: -0.2,
+                          }}
+                        >
+                          {t.currency && t.convertedMyr !== undefined
+                            ? formatRm(t.convertedMyr)
+                            : formatRm(t.amount)}
+                        </div>
+                        {t.currency && (
+                          <div
+                            className="text-muted"
+                            style={{ fontSize: 10, marginTop: 2 }}
+                          >
+                            {formatForeign(t.currency, t.amount)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

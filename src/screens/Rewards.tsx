@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { CatIcon } from '@/components/CatIcon';
 import { DonutRing } from '@/components/DonutRing';
+import { useRewards } from '@/hooks/useRewards';
 import { rewardsMock } from '@/mocks/seed';
 
 const GRAD_CARD =
@@ -23,6 +24,7 @@ const GRAD_HERO =
   'linear-gradient(135deg, #6E4CE6 0%, #9B7BF1 60%, #C9BAFB 100%)';
 
 export default function Rewards() {
+  const { data = rewardsMock } = useRewards();
   const {
     balancePts,
     redeemableMyr,
@@ -32,7 +34,7 @@ export default function Rewards() {
     redeem,
     recent,
     footnote,
-  } = rewardsMock;
+  } = data;
 
   return (
     <div className="text-ink" style={{ paddingBottom: 110 }}>

@@ -40,7 +40,10 @@ export type IconName =
   | 'download'
   | 'search'
   | 'repeat'
-  | 'settings';
+  | 'settings'
+  | 'info'
+  | 'pulse'
+  | 'flash';
 
 type Props = {
   name: IconName;
@@ -251,6 +254,22 @@ export function Icon({
       <g {...stroke}>
         <circle cx="12" cy="12" r="3" />
         <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+      </g>
+    ),
+    info: (
+      <g {...stroke}>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 8v.5M12 11v6" />
+      </g>
+    ),
+    pulse: (
+      <g {...stroke}>
+        <path d="M2 12h4l3-8 6 16 3-8h4" />
+      </g>
+    ),
+    flash: (
+      <g {...stroke}>
+        <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
       </g>
     ),
   };

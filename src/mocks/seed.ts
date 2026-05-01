@@ -405,3 +405,116 @@ export const cardsMock: CardsMock = {
     },
   ],
 };
+
+/**
+ * LHDN screen mock — visual port of
+ * Finpersona-mobile-build/screens-4.jsx. Tax-relief category caps and
+ * recently tagged transactions for YA 2025.
+ */
+export type LhdnIconName = 'book' | 'medical' | 'pulse' | 'flash' | 'star';
+
+export type LhdnCategory = {
+  id: string;
+  name: string;
+  icon: LhdnIconName;
+  cap: number;
+  used: number;
+  items: number;
+  color: string;
+};
+
+export type LhdnRecentTag = {
+  id: string;
+  name: string;
+  category: string;
+  amount: number;
+  icon: CatIconName;
+  date: string;
+};
+
+export type LhdnMock = {
+  taxYear: string;
+  insightCopy: string;
+  insightHighlightRm: number;
+  categories: LhdnCategory[];
+  recent: LhdnRecentTag[];
+};
+
+export const lhdnMock: LhdnMock = {
+  taxYear: 'YA 2025',
+  insightCopy: 'Adding 2 unclaimed receipts could push you to',
+  insightHighlightRm: 5830,
+  categories: [
+    {
+      id: 'lifestyle',
+      name: 'Lifestyle',
+      icon: 'book',
+      cap: 2500,
+      used: 1842,
+      items: 8,
+      color: '#6E4CE6',
+    },
+    {
+      id: 'medical',
+      name: 'Medical (self & family)',
+      icon: 'medical',
+      cap: 8000,
+      used: 1240,
+      items: 4,
+      color: '#D63440',
+    },
+    {
+      id: 'sports',
+      name: 'Sports equipment',
+      icon: 'pulse',
+      cap: 500,
+      used: 350,
+      items: 2,
+      color: '#1FB573',
+    },
+    {
+      id: 'internet',
+      name: 'Internet subscription',
+      icon: 'flash',
+      cap: 2500,
+      used: 1800,
+      items: 12,
+      color: '#1E80B5',
+    },
+    {
+      id: 'skills',
+      name: 'Skills & training',
+      icon: 'star',
+      cap: 7000,
+      used: 350,
+      items: 1,
+      color: '#E89B2A',
+    },
+  ],
+  recent: [
+    {
+      id: 'lr1',
+      name: 'Kinokuniya KLCC',
+      category: 'Lifestyle',
+      amount: 142.0,
+      icon: 'book',
+      date: 'Today',
+    },
+    {
+      id: 'lr2',
+      name: 'Klinik Mediviron',
+      category: 'Medical',
+      amount: 85.0,
+      icon: 'medical',
+      date: 'Yesterday',
+    },
+    {
+      id: 'lr3',
+      name: 'Decathlon',
+      category: 'Sports',
+      amount: 350.0,
+      icon: 'receipt',
+      date: 'Apr 22',
+    },
+  ],
+};

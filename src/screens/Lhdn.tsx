@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { Icon, type IconName } from '@/components/Icon';
 import { CatIcon } from '@/components/CatIcon';
 import { DonutRing } from '@/components/DonutRing';
+import { useLhdn } from '@/hooks/useLhdn';
 import { lhdnMock } from '@/mocks/seed';
 
 const GRAD_CARD =
@@ -18,11 +19,11 @@ const GRAD_GLOW =
   'radial-gradient(120% 80% at 0% 0%, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 60%)';
 
 export default function Lhdn() {
-  const { taxYear, insightCopy, insightHighlightRm, categories, recent } =
-    lhdnMock;
+  const { data = lhdnMock } = useLhdn();
+  const { taxYear, insightCopy, insightHighlightRm, categories, recent } = data;
   const total = categories.reduce((s, c) => s + c.used, 0);
   const cap = categories.reduce((s, c) => s + c.cap, 0);
-  const pct = Math.round((total / cap) * 100);
+  const pct = cap > 0 ? Math.round((total / cap) * 100) : 0;
 
   return (
     <div className="text-ink" style={{ paddingBottom: 110 }}>

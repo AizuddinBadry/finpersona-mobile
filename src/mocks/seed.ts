@@ -644,3 +644,59 @@ export const advisorMock: AdvisorMock = {
   ],
   suggestions: ['Why is dining up?', 'Forecast May', 'Tax tips'],
 };
+
+export type InsightsCategory = {
+  id: string;
+  label: string;
+  amount: number;
+  pct: number;
+  color: string;
+};
+
+export type InsightsMock = {
+  period: 'Week' | 'Month' | 'Year';
+  monthLabel: string;
+  totalRm: number;
+  deltaPct: number;
+  prevTotalRm: number;
+  prevLabel: string;
+  axis: string[];
+  // Cubic bezier path d-attributes from screens-7.jsx, kept here so the
+  // shape matches the mockup pixel-for-pixel without re-deriving math.
+  pathCurrent: string;
+  pathPrevious: string;
+  areaCurrent: string;
+  areaPrevious: string;
+  categories: InsightsCategory[];
+  forecast: { period: string; pace: number; capped: number };
+};
+
+export const insightsMock: InsightsMock = {
+  period: 'Month',
+  monthLabel: 'April',
+  totalRm: 3284,
+  deltaPct: -12,
+  prevTotalRm: 3732,
+  prevLabel: 'March',
+  axis: ['Apr 1', 'Apr 7', 'Apr 14', 'Apr 21', 'Apr 28'],
+  pathCurrent:
+    'M0,68 C30,64 60,72 90,60 C120,48 150,62 180,52 C210,44 240,52 270,38 C290,32 310,42 320,36',
+  pathPrevious:
+    'M0,55 C30,52 60,58 90,52 C120,46 150,55 180,40 C210,28 240,42 270,30 C290,24 310,30 320,28',
+  areaCurrent:
+    'M0,68 C30,64 60,72 90,60 C120,48 150,62 180,52 C210,44 240,52 270,38 C290,32 310,42 320,36 L320,100 L0,100 Z',
+  areaPrevious:
+    'M0,55 C30,52 60,58 90,52 C120,46 150,55 180,40 C210,28 240,42 270,30 C290,24 310,30 320,28 L320,100 L0,100 Z',
+  categories: [
+    { id: 'dining', label: 'Dining', amount: 666, pct: 100, color: '#D97636' },
+    { id: 'transport', label: 'Transport', amount: 488, pct: 73, color: '#1E80B5' },
+    { id: 'shopping', label: 'Shopping', amount: 442, pct: 66, color: '#6E4CE6' },
+    { id: 'bills', label: 'Bills', amount: 380, pct: 57, color: '#1FB573' },
+    { id: 'coffee', label: 'Coffee', amount: 184, pct: 27, color: '#956B3F' },
+  ],
+  forecast: {
+    period: 'May',
+    pace: 3420,
+    capped: 3200,
+  },
+};

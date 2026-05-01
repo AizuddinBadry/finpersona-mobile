@@ -9,6 +9,7 @@ import Cards from '@/screens/Cards';
 import Lhdn from '@/screens/Lhdn';
 import Capture from '@/screens/Capture';
 import Advisor from '@/screens/Advisor';
+import Insights from '@/screens/Insights';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SignupScreen from '@/features/auth/SignupScreen';
 import OnboardingScreen from '@/features/auth/OnboardingScreen';
@@ -68,7 +69,7 @@ export default function AppRoutes() {
           path="/insights"
           element={
             <Tab>
-              <Placeholder label="Insights" />
+              <Insights />
             </Tab>
           }
         />

@@ -27,30 +27,59 @@ export type CurrencyBalance = {
 };
 
 export type HomeMock = {
-  user: { greeting: string; initials: string; points: number };
-  balance: { mainMyr: number; currencies: CurrencyBalance[] };
+  user: {
+    greetingPrefix: string;
+    name: string;
+    initials: string;
+    points: number;
+  };
+  balance: { mainMyr: number; monthChange: number; currencies: CurrencyBalance[] };
+  tier: {
+    name: string;
+    progressPct: number;
+    nextTier: string;
+    nextTierGap: number;
+    multiplier: number;
+  };
   insight: { persona: AiPersona; body: string; cta: string };
+  spendingTotal: number;
   spendingBars: number[];
+  spendingAxis: string[];
   lhdn: { used: number; cap: number };
   recent: RecentTxn[];
 };
 
 export const homeMock: HomeMock = {
-  user: { greeting: 'Good morning, Aizuddin', initials: 'AY', points: 4520 },
+  user: {
+    greetingPrefix: 'Good morning',
+    name: 'Aizuddin',
+    initials: 'AY',
+    points: 4520,
+  },
   balance: {
     mainMyr: 12840.5,
+    monthChange: 240.1,
     currencies: [
       { code: 'MYR', amount: 12840.5, flag: '\u{1F1F2}\u{1F1FE}' },
       { code: 'SGD', amount: 1240.0, flag: '\u{1F1F8}\u{1F1EC}' },
       { code: 'USD', amount: 320.4, flag: '\u{1F1FA}\u{1F1F8}' },
     ],
   },
+  tier: {
+    name: 'Sapphire',
+    progressPct: 68,
+    nextTier: 'Amethyst',
+    nextTierGap: 480,
+    multiplier: 1.5,
+  },
   insight: {
     persona: 'Analyst',
     body: 'You spent 18% more on dining this month.',
     cta: 'See breakdown',
   },
+  spendingTotal: 3284,
   spendingBars: [40, 65, 50, 80, 35, 90, 55],
+  spendingAxis: ['Mon', 'Thu', 'Sun'],
   lhdn: { used: 3120, cap: 9000 },
   recent: [
     {

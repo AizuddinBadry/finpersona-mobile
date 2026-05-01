@@ -43,9 +43,24 @@ function formatPoints(n: number): string {
 }
 
 export default function Home() {
-  const { user, balance, insight, spendingBars, lhdn, recent } = homeMock;
+  const {
+    user,
+    balance,
+    tier,
+    insight,
+    spendingTotal,
+    spendingBars,
+    spendingAxis,
+    lhdn,
+    recent,
+  } = homeMock;
   const lhdnPct = Math.round((lhdn.used / lhdn.cap) * 100);
   const lhdnRemaining = lhdn.cap - lhdn.used;
+  const monthChangeLabel = `± RM ${balance.monthChange.toLocaleString('en-MY', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+  const tierMultiplierLabel = `${tier.multiplier}x`;
 
   // Donut math for the LHDN progress ring.
   const R = 32;
@@ -65,18 +80,20 @@ export default function Home() {
             <div
               className="font-medium text-muted"
               style={{ fontSize: 12, letterSpacing: -0.1 }}
+              aria-hidden
             >
-              {user.greeting.split(', ')[0]}
+              {user.greetingPrefix},
             </div>
             <div
               className="font-semibold text-ink"
               style={{ fontSize: 15, letterSpacing: -0.2 }}
+              aria-hidden
             >
-              {user.greeting.split(', ')[1] ?? ''}
+              {user.name}
             </div>
           </div>
           {/* Hidden machine-readable greeting for tests / a11y */}
-          <span className="sr-only">{user.greeting}</span>
+          <span className="sr-only">{`${user.greetingPrefix}, ${user.name}`}</span>
         </div>
         <div className="flex items-center" style={{ gap: 8 }}>
           <Link
@@ -226,7 +243,7 @@ export default function Home() {
           >
             <Icon name="arrowUp" size={12} color="#C9F5DD" strokeWidth={2.4} />
             <span style={{ color: '#D5F8E3', fontWeight: 600 }}>
-              ± RM 240.10
+              {monthChangeLabel}
             </span>
             <span>this month</span>
           </div>
@@ -370,7 +387,7 @@ export default function Home() {
                 className="font-semibold text-muted"
                 style={{ fontSize: 11 }}
               >
-                pts · Sapphire
+                pts · {tier.name}
               </span>
             </div>
             <div
@@ -384,7 +401,7 @@ export default function Home() {
             >
               <div
                 style={{
-                  width: '68%',
+                  width: `${tier.progressPct}%`,
                   height: '100%',
                   background: GRAD_HERO,
                   borderRadius: 3,
@@ -395,7 +412,7 @@ export default function Home() {
               className="font-medium text-muted"
               style={{ fontSize: 10.5, marginTop: 5 }}
             >
-              480 pts to Amethyst · 1.5x multiplier
+              {tier.nextTierGap} pts to {tier.nextTier} · {tierMultiplierLabel} multiplier
             </div>
           </div>
           <div
@@ -526,7 +543,7 @@ export default function Home() {
                   fontVariantNumeric: 'tabular-nums',
                 }}
               >
-                3,284
+                {spendingTotal.toLocaleString('en-MY')}
               </span>
             </div>
             <div
@@ -551,9 +568,9 @@ export default function Home() {
               className="flex justify-between font-medium text-faint"
               style={{ marginTop: 6, fontSize: 9 }}
             >
-              <span>Mon</span>
-              <span>Thu</span>
-              <span>Sun</span>
+              {spendingAxis.map((label) => (
+                <span key={label}>{label}</span>
+              ))}
             </div>
           </div>
           {/* LHDN donut */}

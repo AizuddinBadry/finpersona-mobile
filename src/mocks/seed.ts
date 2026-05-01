@@ -518,3 +518,56 @@ export const lhdnMock: LhdnMock = {
     },
   ],
 };
+
+export type ParsedField = {
+  label: string;
+  value: string;
+  confident: boolean;
+};
+
+export type CaptureMock = {
+  merchant: string;
+  merchantAddress: string;
+  totalRm: number;
+  receiptLines: number;
+  insightTitle: string;
+  insightSubtitle: string;
+  fields: ParsedField[];
+  lhdn: {
+    eligible: boolean;
+    category: string;
+    capLeft: number;
+  };
+  points: {
+    total: number;
+    base: number;
+    bonusMultiplier: number;
+    bonusReason: string;
+  };
+};
+
+export const captureMock: CaptureMock = {
+  merchant: 'KINOKUNIYA',
+  merchantAddress: 'Lot 4F-128, Suria KLCC',
+  totalRm: 142.0,
+  receiptLines: 4,
+  insightTitle: 'Looks like a book purchase',
+  insightSubtitle: '3 of 4 fields auto-filled · confirm below',
+  fields: [
+    { label: 'Merchant', value: 'Kinokuniya KLCC', confident: true },
+    { label: 'Amount', value: 'RM 142.00', confident: true },
+    { label: 'Date', value: '28 Apr 2026, 09:15', confident: true },
+    { label: 'Pay from', value: 'Maybank Visa •• 4218', confident: false },
+  ],
+  lhdn: {
+    eligible: true,
+    category: 'Lifestyle',
+    capLeft: 658,
+  },
+  points: {
+    total: 284,
+    base: 142,
+    bonusMultiplier: 2,
+    bonusReason: 'LHDN bonus',
+  },
+};

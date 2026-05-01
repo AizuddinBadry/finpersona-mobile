@@ -43,7 +43,9 @@ export type IconName =
   | 'settings'
   | 'info'
   | 'pulse'
-  | 'flash';
+  | 'flash'
+  | 'close'
+  | 'check';
 
 type Props = {
   name: IconName;
@@ -271,6 +273,14 @@ export function Icon({
       <g {...stroke}>
         <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
       </g>
+    ),
+    close: (
+      <g {...stroke}>
+        <path d="M6 6l12 12M18 6L6 18" />
+      </g>
+    ),
+    check: (
+      <path {...stroke} d="M5 12l5 5L20 7" />
     ),
   };
 

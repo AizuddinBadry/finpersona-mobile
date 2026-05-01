@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { Avatar } from '@/components/Avatar';
 import { CatIcon } from '@/components/CatIcon';
+import { useHome } from '@/hooks/useHome';
 import { homeMock } from '@/mocks/seed';
 
 const GRAD_HERO =
@@ -43,6 +44,7 @@ function formatPoints(n: number): string {
 }
 
 export default function Home() {
+  const { data = homeMock } = useHome();
   const {
     user,
     balance,
@@ -53,7 +55,7 @@ export default function Home() {
     spendingAxis,
     lhdn,
     recent,
-  } = homeMock;
+  } = data;
   const lhdnPct = Math.round((lhdn.used / lhdn.cap) * 100);
   const lhdnRemaining = lhdn.cap - lhdn.used;
   const monthChangeLabel = `± RM ${balance.monthChange.toLocaleString('en-MY', {

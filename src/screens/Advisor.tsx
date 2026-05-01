@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { CatIcon } from '@/components/CatIcon';
 import { Sparkline } from '@/components/Sparkline';
+import { useAdvisor } from '@/hooks/useAdvisor';
 import { advisorMock } from '@/mocks/seed';
 
 const GRAD_HERO =
@@ -20,7 +21,8 @@ const GRAD_HERO =
 
 export default function Advisor() {
   const navigate = useNavigate();
-  const { greeting, chart, messages, recs, suggestions } = advisorMock;
+  const { data = advisorMock } = useAdvisor();
+  const { greeting, chart, messages, recs, suggestions } = data;
 
   return (
     <div className="text-ink" style={{ paddingBottom: 110 }}>

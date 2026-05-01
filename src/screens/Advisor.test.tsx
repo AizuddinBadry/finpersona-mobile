@@ -1,13 +1,22 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Advisor from './Advisor';
 
+// Signed-out: useAdvisor is disabled, screen falls back to advisorMock.
+vi.mock('@/hooks/useAuth', () => ({
+  useAuth: () => ({ user: null }),
+}));
+
 function renderAdvisor() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={['/advisor']}>
-      <Advisor />
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={['/advisor']}>
+        <Advisor />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

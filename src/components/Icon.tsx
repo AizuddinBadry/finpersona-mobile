@@ -8,6 +8,8 @@ import type { ReactElement } from 'react';
 export type IconName =
   | 'arrowLeft'
   | 'arrowRight'
+  | 'arrowUp'
+  | 'arrowDown'
   | 'chevronDown'
   | 'chevronRight'
   | 'sparkle'
@@ -20,7 +22,20 @@ export type IconName =
   | 'camera'
   | 'cards'
   | 'bot'
-  | 'plus';
+  | 'plus'
+  | 'bell'
+  | 'eye'
+  | 'star'
+  | 'transfer'
+  | 'food'
+  | 'book'
+  | 'medical'
+  | 'coffee'
+  | 'bag'
+  | 'car'
+  | 'home2'
+  | 'gift'
+  | 'bank';
 
 type Props = {
   name: IconName;
@@ -54,6 +69,16 @@ export function Icon({
     arrowRight: (
       <g {...stroke}>
         <path d="M5 12h14M12 5l7 7-7 7" />
+      </g>
+    ),
+    arrowUp: (
+      <g {...stroke}>
+        <path d="M12 19V5M5 12l7-7 7 7" />
+      </g>
+    ),
+    arrowDown: (
+      <g {...stroke}>
+        <path d="M12 5v14M5 12l7 7 7-7" />
       </g>
     ),
     chevronDown: <path {...stroke} d="M6 9l6 6 6-6" />,
@@ -119,6 +144,81 @@ export function Icon({
     plus: (
       <g {...stroke}>
         <path d="M12 5v14M5 12h14" />
+      </g>
+    ),
+    bell: (
+      <g {...stroke}>
+        <path d="M6 8a6 6 0 1112 0c0 7 3 8 3 8H3s3-1 3-8z" />
+        <path d="M10 21a2 2 0 004 0" />
+      </g>
+    ),
+    eye: (
+      <g {...stroke}>
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+        <circle cx="12" cy="12" r="3" />
+      </g>
+    ),
+    star: (
+      <path
+        {...stroke}
+        d="M12 2l3 7 7 .5-5 5 1.5 7L12 18l-6.5 3.5L7 14.5 2 9.5 9 9z"
+      />
+    ),
+    transfer: (
+      <g {...stroke}>
+        <path d="M7 4l-4 4 4 4M3 8h18M17 12l4 4-4 4M21 16H3" />
+      </g>
+    ),
+    food: (
+      <g {...stroke}>
+        <path d="M3 11h18l-2 9H5l-2-9z" />
+        <path d="M3 11l1-3h16l1 3" />
+      </g>
+    ),
+    book: (
+      <g {...stroke}>
+        <path d="M4 4h7v16H6a2 2 0 01-2-2V4zM20 4h-7v16h5a2 2 0 002-2V4z" />
+      </g>
+    ),
+    medical: (
+      <g {...stroke}>
+        <rect x="4" y="5" width="16" height="15" rx="2" />
+        <path d="M12 9v6M9 12h6M9 5V3h6v2" />
+      </g>
+    ),
+    coffee: (
+      <g {...stroke}>
+        <path d="M3 8h13v6a4 4 0 01-4 4H7a4 4 0 01-4-4V8z" />
+        <path d="M16 10h2a3 3 0 010 6h-2M7 2v3M11 2v3M15 2v3" />
+      </g>
+    ),
+    bag: (
+      <g {...stroke}>
+        <path d="M5 8h14l-1 13H6L5 8z" />
+        <path d="M9 8V5a3 3 0 016 0v3" />
+      </g>
+    ),
+    car: (
+      <g {...stroke}>
+        <path d="M5 17h14l-1.5-7H6.5L5 17z" />
+        <circle cx="8" cy="17" r="2" />
+        <circle cx="16" cy="17" r="2" />
+      </g>
+    ),
+    home2: (
+      <g {...stroke}>
+        <path d="M3 12l9-8 9 8v8a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1v-8z" />
+      </g>
+    ),
+    gift: (
+      <g {...stroke}>
+        <rect x="3" y="9" width="18" height="11" rx="1" />
+        <path d="M3 13h18M12 9v11M12 9c-1.5-3-5-3-5-1s2 1 5 1zM12 9c1.5-3 5-3 5-1s-2 1-5 1z" />
+      </g>
+    ),
+    bank: (
+      <g {...stroke}>
+        <path d="M3 10l9-6 9 6v2H3zM5 12v6M9 12v6M15 12v6M19 12v6M3 19h18" />
       </g>
     ),
   };

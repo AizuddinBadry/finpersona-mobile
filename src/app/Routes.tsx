@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import RequireAuth from './RequireAuth';
 import RequireOnboarded from './RequireOnboarded';
 import Placeholder from '@/screens/Placeholder';
+import Home from '@/screens/Home';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SignupScreen from '@/features/auth/SignupScreen';
 import OnboardingScreen from '@/features/auth/OnboardingScreen';
@@ -46,7 +47,15 @@ export default function AppRoutes() {
           path="/"
           element={
             <Tab>
-              <Placeholder label="Home (Phase 1)" />
+              <Home />
+            </Tab>
+          }
+        />
+        <Route
+          path="/activity"
+          element={
+            <Tab>
+              <Placeholder label="Activity" />
             </Tab>
           }
         />

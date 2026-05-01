@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { CatIcon } from '@/components/CatIcon';
+import { useCards } from '@/hooks/useCards';
 import { cardsMock } from '@/mocks/seed';
 
 const GRAD_GLOW =
@@ -16,7 +17,8 @@ const GRAD_HERO =
   'linear-gradient(135deg, #6E4CE6 0%, #9B7BF1 60%, #C9BAFB 100%)';
 
 export default function Cards() {
-  const { cards, move, rules } = cardsMock;
+  const { data = cardsMock } = useCards();
+  const { cards, move, rules } = data;
   const [enabled, setEnabled] = useState<Record<string, boolean>>(
     Object.fromEntries(rules.map((r) => [r.id, r.defaultEnabled])),
   );

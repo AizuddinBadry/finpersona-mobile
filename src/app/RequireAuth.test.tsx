@@ -51,6 +51,6 @@ describe('RequireAuth', () => {
   it('shows splash while loading', () => {
     useAuthStore.setState({ session: null, isLoading: true });
     renderWithRoute();
-    expect(screen.getByText('Finpersona')).toBeInTheDocument();
+    expect(screen.getByTestId('splash')).toBeInTheDocument();
   });
 });

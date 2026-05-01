@@ -8,6 +8,7 @@ import Activity from '@/screens/Activity';
 import Cards from '@/screens/Cards';
 import Lhdn from '@/screens/Lhdn';
 import Capture from '@/screens/Capture';
+import Advisor from '@/screens/Advisor';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SignupScreen from '@/features/auth/SignupScreen';
 import OnboardingScreen from '@/features/auth/OnboardingScreen';
@@ -83,7 +84,7 @@ export default function AppRoutes() {
           path="/advisor"
           element={
             <Tab>
-              <Placeholder label="Advisor" />
+              <Advisor />
             </Tab>
           }
         />

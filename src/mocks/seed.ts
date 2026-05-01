@@ -571,3 +571,76 @@ export const captureMock: CaptureMock = {
     bonusReason: 'LHDN bonus',
   },
 };
+
+export type AdvisorMessage =
+  | { kind: 'text'; from: 'ai' | 'user'; text: string }
+  | { kind: 'chart' }
+  | { kind: 'recs'; text: string };
+
+export type AdvisorRec = {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: CatIconName;
+};
+
+export type AdvisorMock = {
+  greeting: string;
+  chart: {
+    label: string;
+    valueRm: number;
+    deltaPct: number;
+    points: number[]; // y-values 0..60 SVG coords inverted
+    axis: string[];
+  };
+  messages: AdvisorMessage[];
+  recs: AdvisorRec[];
+  suggestions: string[];
+};
+
+export const advisorMock: AdvisorMock = {
+  greeting: 'I pulled your last 30 days. Two patterns worth flagging.',
+  chart: {
+    label: '30-day · Dining',
+    valueRm: 666,
+    deltaPct: 38,
+    // Y values from screens-6.jsx path. Lower = higher on chart (SVG inverted).
+    points: [40, 38, 42, 30, 32, 28, 36, 18, 22, 12, 20, 8, 10],
+    axis: ['30 Mar', '14 Apr', '28 Apr'],
+  },
+  messages: [
+    {
+      kind: 'text',
+      from: 'ai',
+      text: 'Dining + delivery is up 38% MoM (RM 482 → RM 666). Three weekend orders >RM 80 drove most of it.',
+    },
+    { kind: 'chart' },
+    {
+      kind: 'text',
+      from: 'user',
+      text: 'Show me where I could trim without changing routine.',
+    },
+    { kind: 'recs', text: 'Top three, ranked by impact and reversibility:' },
+  ],
+  recs: [
+    {
+      id: 'r1',
+      title: 'Cap weekend delivery to 1 order',
+      subtitle: 'Saves ~RM 180/mo · low effort',
+      icon: 'food',
+    },
+    {
+      id: 'r2',
+      title: 'Move 2 streaming services to family plans',
+      subtitle: 'Saves ~RM 42/mo · one-time',
+      icon: 'gift',
+    },
+    {
+      id: 'r3',
+      title: 'Auto-tag medical → LHDN',
+      subtitle: 'Recovers RM 240 at filing',
+      icon: 'medical',
+    },
+  ],
+  suggestions: ['Why is dining up?', 'Forecast May', 'Tax tips'],
+};

@@ -45,7 +45,8 @@ export type IconName =
   | 'pulse'
   | 'flash'
   | 'close'
-  | 'check';
+  | 'check'
+  | 'moreV';
 
 type Props = {
   name: IconName;
@@ -281,6 +282,13 @@ export function Icon({
     ),
     check: (
       <path {...stroke} d="M5 12l5 5L20 7" />
+    ),
+    moreV: (
+      <g {...stroke}>
+        <circle cx="12" cy="5" r="1" />
+        <circle cx="12" cy="12" r="1" />
+        <circle cx="12" cy="19" r="1" />
+      </g>
     ),
   };
 

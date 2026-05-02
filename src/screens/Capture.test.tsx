@@ -1,8 +1,51 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Capture from './Capture';
+import type {
+  CapturePhase,
+  ReviewForm,
+} from '@/hooks/useCaptureFlow';
+
+// useCaptureFlow is the orchestrator — mock it so each test drives the
+// screen into a specific phase. Real flow logic lives in
+// useCaptureFlow.test.ts.
+vi.mock('@/hooks/useCaptureFlow', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useCaptureFlow')>();
+  return {
+    ...actual,
+    useCaptureFlow: vi.fn(),
+  };
+});
+
+import { useCaptureFlow } from '@/hooks/useCaptureFlow';
+const mockedUseCaptureFlow = vi.mocked(useCaptureFlow);
+
+const sampleForm: ReviewForm = {
+  merchantName: 'Kinokuniya KLCC',
+  receiptDate: '2026-04-15',
+  totalAmount: 142,
+  currency: 'MYR',
+  category: 'lifestyle',
+  isClaimable: true,
+};
+
+function makeFlow(overrides: Partial<ReturnType<typeof useCaptureFlow>> = {}) {
+  return {
+    phase: 'idle' as CapturePhase,
+    errorMessage: null,
+    form: null,
+    extracted: null,
+    upload: null,
+    insertedId: null,
+    start: vi.fn(),
+    confirm: vi.fn(),
+    reset: vi.fn(),
+    setForm: vi.fn(),
+    ...overrides,
+  } as ReturnType<typeof useCaptureFlow>;
+}
 
 function renderCapture() {
   return render(
@@ -12,36 +55,127 @@ function renderCapture() {
   );
 }
 
+beforeEach(() => {
+  mockedUseCaptureFlow.mockReset();
+});
+
 describe('Capture', () => {
-  it('renders the AI PARSED chip and parsed insight title', () => {
+  it('idle: renders the AI PARSED chip and a Tap to scan CTA', () => {
+    mockedUseCaptureFlow.mockReturnValue(makeFlow({ phase: 'idle' }));
     renderCapture();
     expect(screen.getByText('AI PARSED')).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'Looks like a book purchase' }),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Scan a receipt')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tap to scan' })).toBeInTheDocument();
   });
 
-  it('renders parsed merchant and amount fields', () => {
+  it('idle: clicking Tap to scan calls flow.start()', async () => {
+    const start = vi.fn();
+    mockedUseCaptureFlow.mockReturnValue(makeFlow({ phase: 'idle', start }));
     renderCapture();
-    expect(screen.getByText('Kinokuniya KLCC')).toBeInTheDocument();
-    // Amount appears on the receipt thumbnail and in the parsed field row.
-    expect(screen.getAllByText('RM 142.00').length).toBeGreaterThanOrEqual(1);
+    await userEvent.click(screen.getByRole('button', { name: 'Tap to scan' }));
+    expect(start).toHaveBeenCalledOnce();
   });
 
-  it('toggles the LHDN claimable switch when tapped', async () => {
-    const user = userEvent.setup();
+  it('progress: renders status label while uploading', () => {
+    mockedUseCaptureFlow.mockReturnValue(makeFlow({ phase: 'uploading' }));
     renderCapture();
-    const toggle = screen.getByRole('switch', {
-      name: /LHDN claimable/i,
-    });
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-    await user.click(toggle);
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    // Both the top phase header and the body label render this text.
+    expect(screen.getAllByText('Uploading receipt…').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
-  it('renders the points earned banner with multiplier breakdown', () => {
+  it('progress: renders status label while extracting', () => {
+    mockedUseCaptureFlow.mockReturnValue(makeFlow({ phase: 'extracting' }));
     renderCapture();
-    expect(screen.getByText(/\+284 points/)).toBeInTheDocument();
-    expect(screen.getByText(/142 base × 2 LHDN bonus/)).toBeInTheDocument();
+    expect(screen.getAllByText('Reading with AI…').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('review: renders editable fields pre-filled from extraction', () => {
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'review', form: sampleForm }),
+    );
+    renderCapture();
+    expect(screen.getByDisplayValue('Kinokuniya KLCC')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('2026-04-15')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('142')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('lifestyle')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /LHDN claimable/i })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('review: editing the merchant field calls setForm with the updater', async () => {
+    const setForm = vi.fn();
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'review', form: sampleForm, setForm }),
+    );
+    renderCapture();
+    const merchantInput = screen.getByDisplayValue('Kinokuniya KLCC') as HTMLInputElement;
+    await userEvent.type(merchantInput, '!');
+    expect(setForm).toHaveBeenCalled();
+    // The updater should produce a new merchantName ending with '!' when given the current form.
+    const updater = setForm.mock.calls[setForm.mock.calls.length - 1]![0] as (f: ReviewForm) => ReviewForm;
+    expect(updater(sampleForm).merchantName).toBe('Kinokuniya KLCC!');
+  });
+
+  it('review: tapping LHDN switch toggles isClaimable via setForm', async () => {
+    const setForm = vi.fn();
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'review', form: sampleForm, setForm }),
+    );
+    renderCapture();
+    await userEvent.click(screen.getByRole('switch', { name: /LHDN claimable/i }));
+    const updater = setForm.mock.calls[0]![0] as (f: ReviewForm) => ReviewForm;
+    expect(updater(sampleForm).isClaimable).toBe(false);
+  });
+
+  it('review: Save expense triggers flow.confirm()', async () => {
+    const confirm = vi.fn();
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'review', form: sampleForm, confirm }),
+    );
+    renderCapture();
+    await userEvent.click(screen.getByRole('button', { name: 'Save expense' }));
+    expect(confirm).toHaveBeenCalledOnce();
+  });
+
+  it('review: Cancel triggers flow.reset()', async () => {
+    const reset = vi.fn();
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'review', form: sampleForm, reset }),
+    );
+    renderCapture();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(reset).toHaveBeenCalledOnce();
+  });
+
+  it('saving: Save button is disabled and shows pending label', () => {
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'saving', form: sampleForm }),
+    );
+    renderCapture();
+    const saveBtn = screen.getByRole('button', { name: 'Saving…' }) as HTMLButtonElement;
+    expect(saveBtn.disabled).toBe(true);
+  });
+
+  it('done: shows the success banner', () => {
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'done', insertedId: 'new-id' }),
+    );
+    renderCapture();
+    expect(screen.getByText('Receipt saved')).toBeInTheDocument();
+  });
+
+  it('error: shows the error message and Try again retries via flow.start()', async () => {
+    const start = vi.fn();
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'error', errorMessage: 'Claude rate limited', start }),
+    );
+    renderCapture();
+    expect(screen.getByText("Couldn't capture receipt")).toBeInTheDocument();
+    expect(screen.getByText('Claude rate limited')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(start).toHaveBeenCalledOnce();
   });
 });

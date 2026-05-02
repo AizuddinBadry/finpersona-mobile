@@ -1,41 +1,51 @@
 /**
- * Capture — visual port of Finpersona-mobile-build/screens-5.jsx.
+ * Capture — receipt capture flow.
  *
- * Pushed route at /capture (linked from BottomNav FAB; hideNav so the bottom
- * sheet can claim full bottom of viewport). Dark camera-style background,
- * AI PARSED chip in the top bar, receipt thumbnail, and a bottom sheet with
- * parsed fields + LHDN claimable toggle + points-earned banner. No real
- * OCR — values come from captureMock; the LHDN toggle uses local useState
- * so the switch animates without backend writes.
+ * Phase 3-H wires this to the real pipeline (camera → /api/upload → /api/extract
+ * → receipts insert) via useCaptureFlow. The dark camera-style chrome from the
+ * mockup stays put; the bottom sheet body swaps based on the current phase.
+ *
+ * Phases:
+ *   - idle:                  big "Tap to scan" CTA
+ *   - capturing/upload/etc.: spinner + status label
+ *   - review:                editable parsed fields + LHDN toggle + Save
+ *   - saving:                Save button shows pending state
+ *   - done:                  brief success banner, navigate('/')
+ *   - error:                 error banner + Retry / Cancel
  */
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
-import { captureMock } from '@/mocks/seed';
+import { useCaptureFlow, type CapturePhase } from '@/hooks/useCaptureFlow';
 
 const GRAD_BACKDROP =
   'radial-gradient(120% 80% at 50% -10%, #2A1854 0%, #0A0418 60%)';
 const GRAD_HERO =
   'linear-gradient(135deg, #6E4CE6 0%, #9B7BF1 60%, #C9BAFB 100%)';
-const GRAD_GLOW =
-  'radial-gradient(120% 80% at 0% 0%, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 60%)';
-const GRAD_LHDN =
-  'linear-gradient(135deg, #F5F2FE, #EDE7FB)';
+const GRAD_LHDN = 'linear-gradient(135deg, #F5F2FE, #EDE7FB)';
+
+const PHASE_LABEL: Record<CapturePhase, string> = {
+  idle: 'Ready when you are',
+  capturing: 'Opening camera…',
+  uploading: 'Uploading receipt…',
+  extracting: 'Reading with AI…',
+  review: 'Review parsed details',
+  saving: 'Saving…',
+  done: 'Saved',
+  error: 'Something went wrong',
+};
 
 export default function Capture() {
   const navigate = useNavigate();
-  const {
-    merchant,
-    merchantAddress,
-    totalRm,
-    receiptLines,
-    insightTitle,
-    insightSubtitle,
-    fields,
-    lhdn,
-    points,
-  } = captureMock;
-  const [lhdnOn, setLhdnOn] = useState(lhdn.eligible);
+  const flow = useCaptureFlow();
+
+  // After save succeeds, give the success banner a moment then go home.
+  useEffect(() => {
+    if (flow.phase === 'done') {
+      const t = setTimeout(() => navigate('/'), 900);
+      return () => clearTimeout(t);
+    }
+  }, [flow.phase, navigate]);
 
   return (
     <div
@@ -93,112 +103,28 @@ export default function Capture() {
           <Icon name="sparkle" size={12} color="#C9BAFB" strokeWidth={2.4} />
           AI PARSED
         </div>
-        <button
-          type="button"
-          aria-label="Toggle flash"
-          className="flex items-center justify-center"
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            background: 'rgba(255,255,255,0.12)',
-            backdropFilter: 'blur(12px)',
-            border: 'none',
-            color: '#fff',
-          }}
-        >
-          <Icon name="flash" size={16} color="#fff" />
-        </button>
+        <div style={{ width: 36 }} aria-hidden />
       </div>
 
-      {/* Receipt thumbnail */}
+      {/* Phase header */}
       <div
         style={{
           position: 'relative',
-          marginTop: 32,
-          display: 'flex',
-          justifyContent: 'center',
+          textAlign: 'center',
+          marginTop: 28,
+          color: 'rgba(255,255,255,0.85)',
           zIndex: 5,
         }}
       >
         <div
-          style={{
-            width: 132,
-            height: 168,
-            borderRadius: 14,
-            background: '#fff',
-            boxShadow:
-              '0 20px 50px rgba(110,76,230,0.4), 0 0 0 1px rgba(255,255,255,0.1)',
-            overflow: 'hidden',
-            padding: 12,
-            color: '#1A1530',
-          }}
+          className="font-bold"
+          style={{ fontSize: 13, letterSpacing: 0.4, textTransform: 'uppercase' }}
         >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: 0.4,
-            }}
-          >
-            {merchant}
-          </div>
-          <div style={{ fontSize: 6, color: '#7E7491', marginTop: 2 }}>
-            {merchantAddress}
-          </div>
-          <div
-            style={{
-              marginTop: 8,
-              height: 1,
-              background: 'rgba(91,71,168,0.10)',
-            }}
-          />
-          {Array.from({ length: receiptLines }).map((_, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between"
-              style={{ marginTop: 6 }}
-            >
-              <div
-                style={{
-                  width: '50%',
-                  height: 4,
-                  background: '#EEE',
-                  borderRadius: 1,
-                }}
-              />
-              <div
-                style={{
-                  width: '20%',
-                  height: 4,
-                  background: '#EEE',
-                  borderRadius: 1,
-                }}
-              />
-            </div>
-          ))}
-          <div
-            style={{
-              marginTop: 8,
-              height: 0.5,
-              background: 'rgba(91,71,168,0.10)',
-            }}
-          />
-          <div
-            className="flex items-center justify-between"
-            style={{
-              marginTop: 6,
-              fontSize: 9,
-              fontWeight: 700,
-            }}
-          >
-            <span>TOTAL</span>
-            <span>RM {totalRm.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
+          {PHASE_LABEL[flow.phase]}
         </div>
       </div>
 
-      {/* Bottom sheet */}
+      {/* Body */}
       <div
         style={{
           position: 'relative',
@@ -208,6 +134,7 @@ export default function Capture() {
           padding: '20px 20px 40px',
           boxShadow: '0 -20px 60px rgba(0,0,0,0.3)',
           color: '#1A1530',
+          minHeight: 400,
         }}
       >
         <div
@@ -221,273 +148,415 @@ export default function Capture() {
           }}
         />
 
-        <div
-          className="flex items-center"
-          style={{ gap: 10, marginBottom: 16 }}
-        >
-          <div
-            className="flex items-center justify-center shadow-purpleGlow"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 12,
-              background: GRAD_HERO,
-            }}
-          >
-            <Icon name="sparkle" size={16} color="#fff" strokeWidth={2.2} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h2
-              className="font-bold text-ink"
-              style={{ fontSize: 16, letterSpacing: -0.3 }}
-            >
-              {insightTitle}
-            </h2>
-            <div
-              className="text-muted"
-              style={{ fontSize: 11, marginTop: 1 }}
-            >
-              {insightSubtitle}
-            </div>
-          </div>
-        </div>
+        {flow.phase === 'idle' && (
+          <IdleBody onStart={flow.start} />
+        )}
 
-        {/* Parsed fields */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {fields.map((f) => (
-            <div
-              key={f.label}
-              className="flex items-center justify-between"
-              style={{
-                padding: '12px 14px',
-                borderRadius: 12,
-                background: '#F5F2FE',
-                border: '0.5px solid rgba(91,71,168,0.10)',
-              }}
-            >
-              <div>
-                <div
-                  className="text-muted font-semibold"
-                  style={{
-                    fontSize: 10,
-                    letterSpacing: 0.3,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {f.label}
-                </div>
-                <div
-                  className="font-semibold text-ink"
-                  style={{ fontSize: 14, marginTop: 2, letterSpacing: -0.2 }}
-                >
-                  {f.value}
-                </div>
-              </div>
-              {f.confident ? (
-                <div
-                  aria-label={`${f.label} confirmed`}
-                  className="flex items-center justify-center"
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 12,
-                    background: '#D6F5E5',
-                  }}
-                >
-                  <Icon name="check" size={14} color="#1FB573" strokeWidth={2.6} />
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="font-semibold text-purple"
-                  style={{
-                    fontSize: 11,
-                    background: 'none',
-                    border: 'none',
-                  }}
-                >
-                  Tap to set
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+        {(flow.phase === 'capturing' ||
+          flow.phase === 'uploading' ||
+          flow.phase === 'extracting') && (
+          <ProgressBody label={PHASE_LABEL[flow.phase]} />
+        )}
 
-        {/* LHDN tag */}
+        {(flow.phase === 'review' || flow.phase === 'saving') && flow.form && (
+          <ReviewBody
+            form={flow.form}
+            saving={flow.phase === 'saving'}
+            onChange={flow.setForm}
+            onCancel={flow.reset}
+            onSave={flow.confirm}
+          />
+        )}
+
+        {flow.phase === 'done' && <DoneBody />}
+
+        {flow.phase === 'error' && (
+          <ErrorBody
+            message={flow.errorMessage ?? 'Something went wrong'}
+            onRetry={flow.start}
+            onCancel={() => navigate('/')}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function IdleBody({ onStart }: { onStart: () => void }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '20px 0' }}>
+      <div
+        className="flex items-center justify-center shadow-purpleGlow"
+        style={{
+          width: 88,
+          height: 88,
+          borderRadius: 44,
+          background: GRAD_HERO,
+          margin: '0 auto 16px',
+        }}
+      >
+        <Icon name="camera" size={36} color="#fff" strokeWidth={2.2} />
+      </div>
+      <h2 className="font-bold text-ink" style={{ fontSize: 18, letterSpacing: -0.3 }}>
+        Scan a receipt
+      </h2>
+      <p
+        className="text-muted"
+        style={{ fontSize: 13, marginTop: 4, maxWidth: 260, marginLeft: 'auto', marginRight: 'auto' }}
+      >
+        Snap a photo and we'll pull merchant, total, and the LHDN category for you.
+      </p>
+      <button
+        type="button"
+        onClick={onStart}
+        className="font-bold text-white shadow-purpleGlow"
+        style={{
+          marginTop: 24,
+          padding: '14px 28px',
+          borderRadius: 14,
+          background: GRAD_HERO,
+          fontSize: 14,
+          border: 'none',
+          letterSpacing: -0.1,
+        }}
+      >
+        Tap to scan
+      </button>
+    </div>
+  );
+}
+
+function ProgressBody({ label }: { label: string }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '40px 0' }}>
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-center justify-center"
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: 32,
+          background: '#F5F2FE',
+          margin: '0 auto 12px',
+          border: '3px solid #6E4CE6',
+          borderTopColor: 'transparent',
+          animation: 'spin 1s linear infinite',
+        }}
+      />
+      <div className="font-semibold text-ink" style={{ fontSize: 14 }}>
+        {label}
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+function ReviewBody(props: {
+  form: ReturnType<typeof useCaptureFlow>['form'];
+  saving: boolean;
+  onChange: ReturnType<typeof useCaptureFlow>['setForm'];
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const { form, saving, onChange, onCancel, onSave } = props;
+  if (!form) return null;
+
+  return (
+    <div>
+      <div
+        className="flex items-center"
+        style={{ gap: 10, marginBottom: 16 }}
+      >
         <div
-          className="flex items-center"
+          className="flex items-center justify-center shadow-purpleGlow"
           style={{
-            marginTop: 12,
-            padding: '12px 14px',
-            borderRadius: 12,
-            background: GRAD_LHDN,
-            border: '1px solid rgba(91,71,168,0.10)',
-            gap: 10,
-          }}
-        >
-          <div
-            className="flex items-center justify-center"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: '#fff',
-            }}
-          >
-            <Icon name="receipt" size={16} color="#5837C9" strokeWidth={2} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              className="font-bold"
-              style={{
-                fontSize: 12,
-                color: '#5837C9',
-                letterSpacing: 0.3,
-                textTransform: 'uppercase',
-              }}
-            >
-              LHDN claimable
-            </div>
-            <div
-              style={{
-                fontSize: 12,
-                color: '#39314F',
-                fontWeight: 500,
-                marginTop: 1,
-              }}
-            >
-              Tag under <strong>{lhdn.category}</strong> · RM {lhdn.capLeft} left in cap
-            </div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={lhdnOn}
-            aria-label="Tag as LHDN claimable"
-            onClick={() => setLhdnOn((v) => !v)}
-            style={{
-              width: 36,
-              height: 22,
-              borderRadius: 11,
-              background: lhdnOn ? '#6E4CE6' : '#D8D2E8',
-              position: 'relative',
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'background 0.2s',
-            }}
-          >
-            <span
-              aria-hidden
-              style={{
-                position: 'absolute',
-                left: lhdnOn ? 16 : 2,
-                top: 2,
-                width: 18,
-                height: 18,
-                borderRadius: 9,
-                background: '#fff',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                transition: 'left 0.2s',
-              }}
-            />
-          </button>
-        </div>
-
-        {/* Points earned */}
-        <div
-          className="flex items-center text-white shadow-purpleGlow"
-          style={{
-            marginTop: 10,
-            padding: '12px 14px',
+            width: 36,
+            height: 36,
             borderRadius: 12,
             background: GRAD_HERO,
-            gap: 10,
-            position: 'relative',
-            overflow: 'hidden',
           }}
         >
+          <Icon name="sparkle" size={16} color="#fff" strokeWidth={2.2} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h2 className="font-bold text-ink" style={{ fontSize: 16, letterSpacing: -0.3 }}>
+            Review parsed details
+          </h2>
+          <div className="text-muted" style={{ fontSize: 11, marginTop: 1 }}>
+            Edit anything before saving.
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <Field
+          label="Merchant"
+          value={form.merchantName}
+          onChange={(v) => onChange((p) => ({ ...p, merchantName: v }))}
+        />
+        <Field
+          label="Date"
+          value={form.receiptDate}
+          type="date"
+          onChange={(v) => onChange((p) => ({ ...p, receiptDate: v }))}
+        />
+        <Field
+          label="Total (RM)"
+          value={String(form.totalAmount)}
+          type="number"
+          onChange={(v) => onChange((p) => ({ ...p, totalAmount: Number(v) || 0 }))}
+        />
+        <Field
+          label="Category"
+          value={form.category ?? ''}
+          onChange={(v) => onChange((p) => ({ ...p, category: v || null }))}
+        />
+      </div>
+
+      {/* LHDN toggle */}
+      <div
+        className="flex items-center"
+        style={{
+          marginTop: 12,
+          padding: '12px 14px',
+          borderRadius: 12,
+          background: GRAD_LHDN,
+          border: '1px solid rgba(91,71,168,0.10)',
+          gap: 10,
+        }}
+      >
+        <div
+          className="flex items-center justify-center"
+          style={{ width: 32, height: 32, borderRadius: 8, background: '#fff' }}
+        >
+          <Icon name="receipt" size={16} color="#5837C9" strokeWidth={2} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div
+            className="font-bold"
+            style={{
+              fontSize: 12,
+              color: '#5837C9',
+              letterSpacing: 0.3,
+              textTransform: 'uppercase',
+            }}
+          >
+            LHDN claimable
+          </div>
+          <div style={{ fontSize: 12, color: '#39314F', fontWeight: 500, marginTop: 1 }}>
+            Tag this receipt under your tax relief totals.
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={form.isClaimable}
+          aria-label="Tag as LHDN claimable"
+          onClick={() => onChange((p) => ({ ...p, isClaimable: !p.isClaimable }))}
+          style={{
+            width: 36,
+            height: 22,
+            borderRadius: 11,
+            background: form.isClaimable ? '#6E4CE6' : '#D8D2E8',
+            position: 'relative',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'background 0.2s',
+          }}
+        >
+          <span
             aria-hidden
             style={{
               position: 'absolute',
-              inset: 0,
-              background: GRAD_GLOW,
-              pointerEvents: 'none',
+              left: form.isClaimable ? 16 : 2,
+              top: 2,
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              background: '#fff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+              transition: 'left 0.2s',
             }}
           />
-          <div
-            className="flex items-center justify-center"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              background: 'rgba(255,255,255,0.22)',
-              flexShrink: 0,
-              position: 'relative',
-            }}
-          >
-            <Icon name="star" size={16} color="#fff" strokeWidth={2.4} />
-          </div>
-          <div style={{ flex: 1, position: 'relative' }}>
-            <div
-              className="font-bold"
-              style={{
-                fontSize: 11,
-                opacity: 0.9,
-                letterSpacing: 0.4,
-                textTransform: 'uppercase',
-              }}
-            >
-              You'll earn
-            </div>
-            <div
-              className="font-bold"
-              style={{ fontSize: 14, marginTop: 1, letterSpacing: -0.2 }}
-            >
-              +{points.total} points{' '}
-              <span style={{ opacity: 0.75, fontWeight: 600, fontSize: 11 }}>
-                · {points.base} base × {points.bonusMultiplier} {points.bonusReason}
-              </span>
-            </div>
-          </div>
-        </div>
+        </button>
+      </div>
 
-        <div
-          className="flex items-center"
-          style={{ gap: 10, marginTop: 18 }}
+      <div className="flex items-center" style={{ gap: 10, marginTop: 18 }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="font-semibold"
+          style={{
+            flex: 1,
+            padding: '14px 0',
+            borderRadius: 14,
+            background: '#F5F2FE',
+            color: '#39314F',
+            fontSize: 14,
+            border: 'none',
+            letterSpacing: -0.1,
+            opacity: saving ? 0.5 : 1,
+          }}
         >
-          <button
-            type="button"
-            className="font-semibold"
-            style={{
-              flex: 1,
-              padding: '14px 0',
-              borderRadius: 14,
-              background: '#F5F2FE',
-              color: '#39314F',
-              fontSize: 14,
-              border: 'none',
-              letterSpacing: -0.1,
-            }}
-          >
-            Edit details
-          </button>
-          <button
-            type="button"
-            className="font-bold text-white shadow-purpleGlow"
-            style={{
-              flex: 1.4,
-              padding: '14px 0',
-              borderRadius: 14,
-              background: GRAD_HERO,
-              fontSize: 14,
-              border: 'none',
-              letterSpacing: -0.1,
-            }}
-          >
-            Save expense
-          </button>
-        </div>
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="font-bold text-white shadow-purpleGlow"
+          style={{
+            flex: 1.4,
+            padding: '14px 0',
+            borderRadius: 14,
+            background: GRAD_HERO,
+            fontSize: 14,
+            border: 'none',
+            letterSpacing: -0.1,
+            opacity: saving ? 0.7 : 1,
+          }}
+        >
+          {saving ? 'Saving…' : 'Save expense'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Field(props: {
+  label: string;
+  value: string;
+  type?: string;
+  onChange: (v: string) => void;
+}) {
+  const { label, value, type = 'text', onChange } = props;
+  return (
+    <label
+      style={{
+        padding: '10px 14px',
+        borderRadius: 12,
+        background: '#F5F2FE',
+        border: '0.5px solid rgba(91,71,168,0.10)',
+        display: 'block',
+      }}
+    >
+      <div
+        className="text-muted font-semibold"
+        style={{
+          fontSize: 10,
+          letterSpacing: 0.3,
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </div>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="font-semibold text-ink"
+        style={{
+          fontSize: 14,
+          marginTop: 4,
+          letterSpacing: -0.2,
+          width: '100%',
+          background: 'transparent',
+          border: 'none',
+          outline: 'none',
+        }}
+      />
+    </label>
+  );
+}
+
+function DoneBody() {
+  return (
+    <div style={{ textAlign: 'center', padding: '40px 0' }}>
+      <div
+        className="flex items-center justify-center"
+        style={{
+          width: 72,
+          height: 72,
+          borderRadius: 36,
+          background: '#D6F5E5',
+          margin: '0 auto 12px',
+        }}
+      >
+        <Icon name="check" size={32} color="#1FB573" strokeWidth={2.6} />
+      </div>
+      <div className="font-bold text-ink" style={{ fontSize: 18, letterSpacing: -0.3 }}>
+        Receipt saved
+      </div>
+      <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+        Returning home…
+      </div>
+    </div>
+  );
+}
+
+function ErrorBody(props: {
+  message: string;
+  onRetry: () => void;
+  onCancel: () => void;
+}) {
+  const { message, onRetry, onCancel } = props;
+  return (
+    <div style={{ textAlign: 'center', padding: '20px 0' }}>
+      <div
+        className="flex items-center justify-center"
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: 32,
+          background: '#FFE4E6',
+          margin: '0 auto 12px',
+        }}
+      >
+        <Icon name="close" size={28} color="#D63440" strokeWidth={2.4} />
+      </div>
+      <div className="font-bold text-ink" style={{ fontSize: 16, letterSpacing: -0.3 }}>
+        Couldn't capture receipt
+      </div>
+      <div
+        className="text-muted"
+        style={{ fontSize: 12, marginTop: 4, maxWidth: 280, margin: '4px auto 0' }}
+      >
+        {message}
+      </div>
+      <div className="flex items-center" style={{ gap: 10, marginTop: 20 }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="font-semibold"
+          style={{
+            flex: 1,
+            padding: '14px 0',
+            borderRadius: 14,
+            background: '#F5F2FE',
+            color: '#39314F',
+            fontSize: 14,
+            border: 'none',
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="font-bold text-white shadow-purpleGlow"
+          style={{
+            flex: 1,
+            padding: '14px 0',
+            borderRadius: 14,
+            background: GRAD_HERO,
+            fontSize: 14,
+            border: 'none',
+          }}
+        >
+          Try again
+        </button>
       </div>
     </div>
   );

@@ -19,7 +19,7 @@ vi.mock('@/lib/env', () => ({
   }),
 }));
 
-import { uploadReceipt, extractReceipt } from './finpersona';
+import { uploadReceipt, extractReceipt, postAdvisorMessage } from './finpersona';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -166,5 +166,81 @@ describe('extractReceipt', () => {
         fetchImpl: fetchImpl as unknown as typeof fetch,
       }),
     ).rejects.toThrow(/500/);
+  });
+});
+
+describe('postAdvisorMessage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('POSTs the message with Bearer auth and returns parsed assistant turn', async () => {
+    const serverPayload = {
+      id: 'row-1',
+      text: 'You spent RM 142 on lifestyle this month.',
+      blocks: [
+        { type: 'chart', metric: 'lifestyle_spend', points: [{ x: 'Jan', y: 142 }] },
+      ],
+      suggestionChips: ['Show me last month', 'How does this affect tax?'],
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(serverPayload));
+
+    const result = await postAdvisorMessage({
+      message: 'How am I doing this month?',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect(result).toEqual(serverPayload);
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://api.test/api/advisor/chat',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer tkn',
+        }),
+      }),
+    );
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1].body as string);
+    expect(body).toEqual({ message: 'How am I doing this month?' });
+  });
+
+  it('throws when the server returns an error envelope', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({ error: 'Unauthorized' }, 401),
+    );
+    await expect(
+      postAdvisorMessage({
+        message: 'hi',
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      }),
+    ).rejects.toThrow('Unauthorized');
+  });
+
+  it('falls back to a status-coded message when the body has no error string', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response('{}', { status: 500, headers: { 'Content-Type': 'application/json' } }),
+    );
+    await expect(
+      postAdvisorMessage({
+        message: 'hi',
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      }),
+    ).rejects.toThrow(/500/);
+  });
+
+  it('coerces missing/non-array blocks and suggestionChips into safe defaults', async () => {
+    // Server (or a future schema drift) might omit fields. The client should
+    // not crash callers downstream.
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({ id: 'row-2', text: 'ok' }),
+    );
+    const result = await postAdvisorMessage({
+      message: 'hi',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result.blocks).toEqual([]);
+    expect(result.suggestionChips).toEqual([]);
   });
 });

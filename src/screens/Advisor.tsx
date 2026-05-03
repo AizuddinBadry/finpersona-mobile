@@ -8,12 +8,13 @@
  *
  * Route /advisor (BottomNav 'Advisor' tab).
  */
-import { Fragment } from 'react';
+import { Fragment, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { CatIcon } from '@/components/CatIcon';
 import { Sparkline } from '@/components/Sparkline';
 import { useAdvisor } from '@/hooks/useAdvisor';
+import { useAdvisorSend } from '@/hooks/useAdvisorSend';
 import { advisorMock } from '@/mocks/seed';
 
 const GRAD_HERO =
@@ -23,6 +24,20 @@ export default function Advisor() {
   const navigate = useNavigate();
   const { data = advisorMock } = useAdvisor();
   const { greeting, chart, messages, recs, suggestions } = data;
+  const send = useAdvisorSend();
+  const [draft, setDraft] = useState('');
+
+  const submit = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || send.isPending) return;
+    setDraft('');
+    send.mutate(trimmed);
+  };
+
+  const onComposerSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    submit(draft);
+  };
 
   return (
     <div className="text-ink" style={{ paddingBottom: 110 }}>
@@ -316,6 +331,26 @@ export default function Advisor() {
           );
         })}
 
+        {/* Typing indicator while the assistant turn is in flight. */}
+        {send.isPending && (
+          <div
+            aria-label="Finpersona is typing"
+            role="status"
+            className="bg-surface shadow-card text-muted font-medium"
+            style={{
+              alignSelf: 'flex-start',
+              maxWidth: '60%',
+              padding: '11px 14px',
+              borderRadius: '16px 16px 16px 4px',
+              border: '0.5px solid rgba(91,71,168,0.10)',
+              fontSize: 13.5,
+              lineHeight: 1.4,
+            }}
+          >
+            Finpersona is thinking…
+          </div>
+        )}
+
         {/* Suggestion chips */}
         <div
           className="flex items-center"
@@ -325,6 +360,8 @@ export default function Advisor() {
             <button
               key={s}
               type="button"
+              onClick={() => submit(s)}
+              disabled={send.isPending}
               className="font-semibold"
               style={{
                 padding: '7px 12px',
@@ -333,6 +370,8 @@ export default function Advisor() {
                 color: '#5837C9',
                 fontSize: 11.5,
                 border: '0.5px solid rgba(91,71,168,0.10)',
+                cursor: send.isPending ? 'not-allowed' : 'pointer',
+                opacity: send.isPending ? 0.6 : 1,
               }}
             >
               {s}
@@ -341,8 +380,53 @@ export default function Advisor() {
         </div>
       </div>
 
+      {/* Error banner — shows the last failed send. Manually dismissable so
+          repeated failures don't pile up. */}
+      {send.isError && (
+        <div
+          role="alert"
+          style={{
+            position: 'fixed',
+            bottom: 158,
+            left: 16,
+            right: 16,
+            maxWidth: 392,
+            margin: '0 auto',
+            padding: '8px 12px',
+            borderRadius: 12,
+            background: '#FDECEE',
+            border: '0.5px solid rgba(214,52,64,0.20)',
+            color: '#9B1F2A',
+            fontSize: 12.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <span style={{ flex: 1 }}>
+            {send.error instanceof Error ? send.error.message : 'Send failed'}
+          </span>
+          <button
+            type="button"
+            onClick={() => send.reset()}
+            aria-label="Dismiss error"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#9B1F2A',
+              fontSize: 16,
+              lineHeight: 1,
+              padding: 4,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Composer */}
-      <div
+      <form
+        onSubmit={onComposerSubmit}
         className="flex items-center bg-surface shadow-card"
         style={{
           position: 'fixed',
@@ -357,15 +441,28 @@ export default function Advisor() {
           margin: '0 auto',
         }}
       >
-        <span
-          className="text-muted font-medium"
-          style={{ flex: 1, fontSize: 14, color: '#A89DC1' }}
-        >
-          Ask Finpersona…
-        </span>
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Ask Finpersona…"
+          aria-label="Message Finpersona"
+          disabled={send.isPending}
+          className="font-medium"
+          style={{
+            flex: 1,
+            fontSize: 14,
+            color: '#39314F',
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            padding: 0,
+          }}
+        />
         <button
-          type="button"
+          type="submit"
           aria-label="Send message"
+          disabled={send.isPending || draft.trim().length === 0}
           className="flex items-center justify-center shadow-purpleGlow"
           style={{
             width: 36,
@@ -373,11 +470,16 @@ export default function Advisor() {
             borderRadius: 18,
             background: GRAD_HERO,
             border: 'none',
+            opacity: send.isPending || draft.trim().length === 0 ? 0.55 : 1,
+            cursor:
+              send.isPending || draft.trim().length === 0
+                ? 'not-allowed'
+                : 'pointer',
           }}
         >
           <Icon name="arrowUp" size={16} color="#fff" strokeWidth={2.4} />
         </button>
-      </div>
+      </form>
     </div>
   );
 }

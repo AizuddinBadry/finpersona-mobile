@@ -15,6 +15,7 @@
  */
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Field } from '@/components/Field';
 import { Icon } from '@/components/Icon';
 import { useCaptureFlow, type CapturePhase } from '@/hooks/useCaptureFlow';
 
@@ -422,52 +423,6 @@ function ReviewBody(props: {
         </button>
       </div>
     </div>
-  );
-}
-
-function Field(props: {
-  label: string;
-  value: string;
-  type?: string;
-  onChange: (v: string) => void;
-}) {
-  const { label, value, type = 'text', onChange } = props;
-  return (
-    <label
-      style={{
-        padding: '10px 14px',
-        borderRadius: 12,
-        background: '#F5F2FE',
-        border: '0.5px solid rgba(91,71,168,0.10)',
-        display: 'block',
-      }}
-    >
-      <div
-        className="text-muted font-semibold"
-        style={{
-          fontSize: 10,
-          letterSpacing: 0.3,
-          textTransform: 'uppercase',
-        }}
-      >
-        {label}
-      </div>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="font-semibold text-ink"
-        style={{
-          fontSize: 14,
-          marginTop: 4,
-          letterSpacing: -0.2,
-          width: '100%',
-          background: 'transparent',
-          border: 'none',
-          outline: 'none',
-        }}
-      />
-    </label>
   );
 }
 

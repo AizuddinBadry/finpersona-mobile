@@ -36,25 +36,55 @@ export type AdvisorMessageRow = {
   created_at: string;
 };
 
-export type ContentBlock =
-  | {
-      type: 'chart';
-      label?: string;
-      metric?: string;
-      valueRm?: number;
-      deltaPct?: number;
-      points: number[];
-      axis?: string[];
-    }
-  | {
-      type: 'recommendations';
-      items: Array<{
-        id?: string;
-        title: string;
-        subtitle?: string;
-        icon?: CatIconName;
-      }>;
-    };
+/**
+ * advisor_messages.content_blocks accepts two shapes:
+ *
+ *   "Mobile" shape — used by hand-seeded fixtures and earlier mocks. Numeric
+ *   `points`, `valueRm`/`deltaPct` baked in, optional category-icon recs.
+ *
+ *   "Server" shape — emitted by the web app's runAdvisorAgent (see
+ *   finpersona/lib/advisor/types.ts). Chart points are `{x: string, y:
+ *   number}[]` and recommendations carry `{title, body, action?}`.
+ *
+ * shapeAdvisor accepts either and projects them down to the AdvisorMock
+ * shape the screen renders. Callers don't need to disambiguate.
+ */
+export type ContentBlock = ChartBlockMobile | ChartBlockServer | RecsBlockMobile | RecsBlockServer;
+
+type ChartBlockMobile = {
+  type: 'chart';
+  label?: string;
+  metric?: string;
+  valueRm?: number;
+  deltaPct?: number;
+  points: number[];
+  axis?: string[];
+};
+
+type ChartBlockServer = {
+  type: 'chart';
+  metric: string;
+  points: Array<{ x: string; y: number }>;
+};
+
+type RecsBlockMobile = {
+  type: 'recommendations';
+  items: Array<{
+    id?: string;
+    title: string;
+    subtitle?: string;
+    icon?: CatIconName;
+  }>;
+};
+
+type RecsBlockServer = {
+  type: 'recommendations';
+  items: Array<{
+    title: string;
+    body: string;
+    action?: { label: string; route: string };
+  }>;
+};
 
 const HISTORY_LIMIT = 50;
 const VALID_CAT_ICONS: ReadonlySet<CatIconName> = new Set<CatIconName>([
@@ -77,6 +107,81 @@ const VALID_CAT_ICONS: ReadonlySet<CatIconName> = new Set<CatIconName>([
 function safeIcon(icon: string | undefined): CatIconName {
   if (icon && VALID_CAT_ICONS.has(icon as CatIconName)) return icon as CatIconName;
   return 'receipt';
+}
+
+/**
+ * Project a chart block (mobile or server shape) onto the AdvisorMock.chart
+ * shape the Sparkline renders. Returns null if neither shape's required
+ * fields are present, in which case the caller falls back to the seed mock.
+ */
+function shapeChartBlock(
+  block: ChartBlockMobile | ChartBlockServer,
+): AdvisorMock['chart'] | null {
+  // Server shape: points = [{x, y}, ...]. Detect by inspecting the first
+  // entry — number[] is the legacy mobile shape.
+  const isServerShape =
+    Array.isArray(block.points) &&
+    block.points.length > 0 &&
+    typeof (block.points[0] as { x?: unknown; y?: unknown })?.y === 'number';
+
+  if (isServerShape) {
+    const serverPoints = (block as ChartBlockServer).points;
+    const ys = serverPoints.map((p) => p.y);
+    const xs = serverPoints.map((p) => p.x);
+    return {
+      label: block.metric ?? advisorMock.chart.label,
+      // We don't carry an absolute total or MoM delta in the server shape,
+      // so use the latest sample as a proxy and leave delta at 0. The text
+      // bubble next to the chart is where the real narrative lives.
+      valueRm: ys.at(-1) ?? advisorMock.chart.valueRm,
+      deltaPct: 0,
+      points: ys,
+      // Sample first/middle/last x labels so the axis row stays readable
+      // regardless of how many points the server emits.
+      axis: sampleAxis(xs),
+    };
+  }
+
+  // Mobile shape (or empty array — fall back to mock).
+  const m = block as ChartBlockMobile;
+  if (!Array.isArray(m.points) || m.points.length === 0) return null;
+  return {
+    label: m.label ?? m.metric ?? advisorMock.chart.label,
+    valueRm: m.valueRm ?? advisorMock.chart.valueRm,
+    deltaPct: m.deltaPct ?? advisorMock.chart.deltaPct,
+    points: m.points,
+    axis: m.axis ?? advisorMock.chart.axis,
+  };
+}
+
+/** Pick first/middle/last from an axis array so the chart caption stays compact. */
+function sampleAxis(xs: string[]): string[] {
+  if (xs.length <= 3) return xs.slice();
+  const mid = Math.floor(xs.length / 2);
+  return [xs[0]!, xs[mid]!, xs[xs.length - 1]!];
+}
+
+/**
+ * Project a recommendations block (mobile or server shape) onto AdvisorRec[].
+ * Server items expose `body`; mobile items expose `subtitle`/`icon`. Either
+ * works; missing fields fall back to safe defaults.
+ */
+function shapeRecsItems(
+  block: RecsBlockMobile | RecsBlockServer,
+  rowId: string,
+  startIndex: number,
+): AdvisorRec[] {
+  return block.items.map((raw, i) => {
+    const item = raw as Partial<RecsBlockMobile['items'][number]> &
+      Partial<RecsBlockServer['items'][number]>;
+    return {
+      id: item.id ?? `${rowId}-${startIndex + i}`,
+      title: item.title ?? '',
+      // server-shape items use `body`; mobile-shape items use `subtitle`.
+      subtitle: item.subtitle ?? item.body ?? '',
+      icon: safeIcon(item.icon),
+    };
+  });
 }
 
 /**
@@ -123,25 +228,15 @@ export function shapeAdvisor(rows: AdvisorMessageRow[]): AdvisorMock {
         // Hoist the first chart we find into AdvisorMock.chart and emit a
         // marker into the message stream so the screen renders it inline.
         if (!chartFound) {
-          chart = {
-            label: block.label ?? block.metric ?? advisorMock.chart.label,
-            valueRm: block.valueRm ?? advisorMock.chart.valueRm,
-            deltaPct: block.deltaPct ?? advisorMock.chart.deltaPct,
-            points: block.points ?? advisorMock.chart.points,
-            axis: block.axis ?? advisorMock.chart.axis,
-          };
-          chartFound = true;
+          const shaped = shapeChartBlock(block);
+          if (shaped) {
+            chart = shaped;
+            chartFound = true;
+          }
         }
         messages.push({ kind: 'chart' });
       } else if (block.type === 'recommendations') {
-        for (const item of block.items) {
-          recs.push({
-            id: item.id ?? `${row.id}-${recs.length}`,
-            title: item.title,
-            subtitle: item.subtitle ?? '',
-            icon: safeIcon(item.icon),
-          });
-        }
+        recs.push(...shapeRecsItems(block, row.id, recs.length));
         messages.push({
           kind: 'recs',
           // The recs marker carries an intro line that the screen renders

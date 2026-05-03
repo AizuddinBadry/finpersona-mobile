@@ -11,6 +11,7 @@ import Capture from '@/screens/Capture';
 import Advisor from '@/screens/Advisor';
 import Insights from '@/screens/Insights';
 import Rewards from '@/screens/Rewards';
+import ReceiptDetail from '@/screens/ReceiptDetail';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SignupScreen from '@/features/auth/SignupScreen';
 import OnboardingScreen from '@/features/auth/OnboardingScreen';
@@ -111,6 +112,14 @@ export default function AppRoutes() {
           element={
             <Tab>
               <Rewards />
+            </Tab>
+          }
+        />
+        <Route
+          path="/receipts/:id"
+          element={
+            <Tab>
+              <ReceiptDetail />
             </Tab>
           }
         />

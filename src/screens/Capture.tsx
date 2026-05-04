@@ -10,10 +10,9 @@
  *   - capturing/upload/etc.: spinner + status label
  *   - review:                editable parsed fields + LHDN toggle + Save
  *   - saving:                Save button shows pending state
- *   - done:                  brief success banner, navigate('/')
+ *   - done:                  success banner with View receipt + Back to home
  *   - error:                 error banner + Retry / Cancel
  */
-import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Field } from '@/components/Field';
 import { Icon } from '@/components/Icon';
@@ -39,14 +38,6 @@ const PHASE_LABEL: Record<CapturePhase, string> = {
 export default function Capture() {
   const navigate = useNavigate();
   const flow = useCaptureFlow();
-
-  // After save succeeds, give the success banner a moment then go home.
-  useEffect(() => {
-    if (flow.phase === 'done') {
-      const t = setTimeout(() => navigate('/'), 900);
-      return () => clearTimeout(t);
-    }
-  }, [flow.phase, navigate]);
 
   return (
     <div
@@ -169,7 +160,15 @@ export default function Capture() {
           />
         )}
 
-        {flow.phase === 'done' && <DoneBody />}
+        {flow.phase === 'done' && (
+          <DoneBody
+            insertedId={flow.insertedId}
+            onViewReceipt={() => {
+              if (flow.insertedId) navigate(`/receipts/${flow.insertedId}`);
+            }}
+            onBackHome={() => navigate('/')}
+          />
+        )}
 
         {flow.phase === 'error' && (
           <ErrorBody
@@ -426,7 +425,12 @@ function ReviewBody(props: {
   );
 }
 
-function DoneBody() {
+function DoneBody(props: {
+  insertedId: string | null;
+  onViewReceipt: () => void;
+  onBackHome: () => void;
+}) {
+  const { insertedId, onViewReceipt, onBackHome } = props;
   return (
     <div style={{ textAlign: 'center', padding: '40px 0' }}>
       <div
@@ -445,7 +449,47 @@ function DoneBody() {
         Receipt saved
       </div>
       <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-        Returning home…
+        What next?
+      </div>
+      <div
+        className="flex items-center"
+        style={{ gap: 10, marginTop: 20, padding: '0 4px' }}
+      >
+        <button
+          type="button"
+          onClick={onBackHome}
+          className="font-semibold"
+          style={{
+            flex: 1,
+            padding: '14px 0',
+            borderRadius: 14,
+            background: '#F5F2FE',
+            color: '#39314F',
+            fontSize: 14,
+            border: 'none',
+            letterSpacing: -0.1,
+          }}
+        >
+          Back to home
+        </button>
+        <button
+          type="button"
+          onClick={onViewReceipt}
+          disabled={!insertedId}
+          className="font-bold text-white shadow-purpleGlow"
+          style={{
+            flex: 1.4,
+            padding: '14px 0',
+            borderRadius: 14,
+            background: GRAD_HERO,
+            fontSize: 14,
+            border: 'none',
+            letterSpacing: -0.1,
+            opacity: insertedId ? 1 : 0.5,
+          }}
+        >
+          View receipt
+        </button>
       </div>
     </div>
   );

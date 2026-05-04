@@ -8,6 +8,15 @@ import type {
   ReviewForm,
 } from '@/hooks/useCaptureFlow';
 
+// Spy on useNavigate so we can assert what the screen does on done-phase
+// button clicks. Mirrors the pattern used in ReceiptDetail/Activity tests.
+const navigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const mod =
+    await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return { ...mod, useNavigate: () => navigate };
+});
+
 // useCaptureFlow is the orchestrator — mock it so each test drives the
 // screen into a specific phase. Real flow logic lives in
 // useCaptureFlow.test.ts.
@@ -57,6 +66,7 @@ function renderCapture() {
 
 beforeEach(() => {
   mockedUseCaptureFlow.mockReset();
+  navigate.mockReset();
 });
 
 describe('Capture', () => {
@@ -159,12 +169,59 @@ describe('Capture', () => {
     expect(saveBtn.disabled).toBe(true);
   });
 
-  it('done: shows the success banner', () => {
+  it('done: shows the success banner with View receipt + Back to home buttons', () => {
     mockedUseCaptureFlow.mockReturnValue(
       makeFlow({ phase: 'done', insertedId: 'new-id' }),
     );
     renderCapture();
     expect(screen.getByText('Receipt saved')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'View receipt' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Back to home' }),
+    ).toBeInTheDocument();
+  });
+
+  it('done: clicking View receipt navigates to /receipts/<insertedId>', async () => {
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'done', insertedId: 'new-id' }),
+    );
+    renderCapture();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'View receipt' }),
+    );
+    expect(navigate).toHaveBeenCalledWith('/receipts/new-id');
+  });
+
+  it('done: clicking Back to home navigates to /', async () => {
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'done', insertedId: 'new-id' }),
+    );
+    renderCapture();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Back to home' }),
+    );
+    expect(navigate).toHaveBeenCalledWith('/');
+  });
+
+  it('done: does not auto-navigate — navigate stays untouched until a button is clicked', () => {
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'done', insertedId: 'new-id' }),
+    );
+    renderCapture();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('done: View receipt is disabled when insertedId is null', () => {
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'done', insertedId: null }),
+    );
+    renderCapture();
+    const viewBtn = screen.getByRole('button', {
+      name: 'View receipt',
+    }) as HTMLButtonElement;
+    expect(viewBtn.disabled).toBe(true);
   });
 
   it('error: shows the error message and Try again retries via flow.start()', async () => {

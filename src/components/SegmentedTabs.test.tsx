@@ -9,7 +9,7 @@ import { SegmentedTabs } from './SegmentedTabs';
 
 type Mode = 'claimable' | 'all';
 
-const OPTIONS: ReadonlyArray<{ value: Mode; label: string }> = [
+const OPTIONS: ReadonlyArray<{ readonly value: Mode; readonly label: string }> = [
   { value: 'claimable', label: 'Claimable' },
   { value: 'all', label: 'All spend' },
 ];

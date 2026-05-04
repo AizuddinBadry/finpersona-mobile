@@ -8,9 +8,10 @@
  * generic value parameter lets callers pin the literal union so onChange
  * narrows to the exact option set.
  */
+import { tokens } from '../styles/tokens';
 
 type SegmentedTabsProps<T extends string> = {
-  options: ReadonlyArray<{ value: T; label: string }>;
+  options: ReadonlyArray<{ readonly value: T; readonly label: string }>;
   value: T;
   onChange: (next: T) => void;
 };
@@ -29,7 +30,7 @@ export function SegmentedTabs<T extends string>({
         gap: 4,
         padding: 3,
         borderRadius: 999,
-        background: 'rgba(91,71,168,0.08)',
+        background: tokens.color.hairline,
       }}
     >
       {options.map((opt) => {
@@ -49,7 +50,7 @@ export function SegmentedTabs<T extends string>({
               borderRadius: 999,
               fontSize: 12,
               background: active ? '#fff' : 'transparent',
-              color: active ? '#1A1530' : '#7E7491',
+              color: active ? tokens.color.ink : tokens.color.muted,
               border: 'none',
               boxShadow: active
                 ? '0 1px 2px rgba(26,21,48,0.08)'

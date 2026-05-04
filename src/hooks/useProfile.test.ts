@@ -102,7 +102,7 @@ describe('useUpdatePersona', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
   });
 
-  it("invalidates ['advisor', uid] on success", async () => {
+  it("invalidates ['advisor', uid] and ['home', uid] on success", async () => {
     const { qc, wrapper } = makeWrapper();
     qc.setQueryData<ProfileRow>(['profile', 'user-1'], sampleProfile);
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
@@ -123,6 +123,7 @@ describe('useUpdatePersona', () => {
       (c) => (c[0] as { queryKey: unknown[] }).queryKey,
     );
     expect(keys).toContainEqual(['advisor', 'user-1']);
+    expect(keys).toContainEqual(['home', 'user-1']);
   });
 
   it('rolls back the optimistic update when the mutation fails', async () => {

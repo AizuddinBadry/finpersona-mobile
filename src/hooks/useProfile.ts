@@ -8,8 +8,9 @@
  *   useUpdatePersona   write `advisor_persona` optimistically so the UI
  *                      flips instantly when the user picks a persona;
  *                      rolls back on failure, and on success invalidates
- *                      ['advisor', uid] because the persona drives the
- *                      advisor's suggestion chips and tone
+ *                      ['advisor', uid] (suggestion chips + tone) and
+ *                      ['home', uid] (Home's insight tone is persona-derived
+ *                      via personaFor() in queries/home.ts)
  *
  * The optional `deps` arg follows the useAdvisorSend / useReceipt
  * convention: tests inject stubbed query functions and never have to
@@ -74,9 +75,11 @@ export function useUpdatePersona(deps: UseUpdatePersonaDeps = {}) {
 
     onSuccess: () => {
       const uid = user?.id ?? '';
-      // Persona drives the advisor's tone + suggestion chips, so the
-      // existing thread cache is now stale.
+      // Persona drives the advisor's tone + suggestion chips AND the
+      // Home insight tone (queries/home.ts uses personaFor()), so both
+      // caches are stale after a swap.
       qc.invalidateQueries({ queryKey: ['advisor', uid] });
+      qc.invalidateQueries({ queryKey: ['home', uid] });
     },
 
     onError: (_err, _persona, context) => {

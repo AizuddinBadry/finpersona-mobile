@@ -17,11 +17,11 @@ vi.mock('react-router-dom', async () => {
   return { ...mod, useNavigate: () => navigate };
 });
 
-function renderActivity() {
+function renderActivity(initialEntry = '/activity') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/activity']}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <Activity />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -81,5 +81,101 @@ describe('Activity', () => {
     await userEvent.click(row);
 
     expect(navigate).toHaveBeenCalledWith('/receipts/a1');
+  });
+
+  // ─── ?category=<code> URL filter ──────────────────────────────────────────
+
+  it('without ?category, no filter chip renders', () => {
+    renderActivity();
+    expect(screen.queryByText(/^Filtered:/)).not.toBeInTheDocument();
+  });
+
+  it('with ?category=lifestyle, only matching rows render', () => {
+    renderActivity('/activity?category=lifestyle');
+
+    // Lifestyle bucket: "Books & journals" → a2 Kinokuniya KLCC, a8 BookXcess.
+    expect(screen.getByText('Kinokuniya KLCC')).toBeInTheDocument();
+    expect(screen.getByText('BookXcess Mid Valley')).toBeInTheDocument();
+
+    // Non-matching rows are filtered out.
+    expect(screen.queryByText("Mama's Kitchen")).not.toBeInTheDocument();
+    expect(screen.queryByText('Klinik Mediviron')).not.toBeInTheDocument();
+    expect(screen.queryByText('Salary · Maybank')).not.toBeInTheDocument();
+    expect(screen.queryByText('Shell Bangsar')).not.toBeInTheDocument();
+  });
+
+  it('renders a filter chip with the human-readable name and clear button', () => {
+    renderActivity('/activity?category=medical_health');
+
+    // Title-cased: 'medical_health' → 'Medical health'.
+    const chip = screen.getByRole('button', { name: /Clear filter/i });
+    expect(chip).toBeInTheDocument();
+    expect(chip).toHaveTextContent('Filtered: Medical health');
+    expect(chip).toHaveTextContent('✕');
+  });
+
+  it('title-cases lifestyle_general → Lifestyle general in the chip', () => {
+    renderActivity('/activity?category=lifestyle_general');
+    const chip = screen.getByRole('button', { name: /Clear filter/i });
+    expect(chip).toHaveTextContent('Filtered: Lifestyle general');
+  });
+
+  it('renders Other claimable for the synthetic other-claimable code', () => {
+    renderActivity('/activity?category=other-claimable');
+    const chip = screen.getByRole('button', { name: /Clear filter/i });
+    expect(chip).toHaveTextContent('Filtered: Other claimable');
+  });
+
+  it('tapping the filter chip clears the filter', async () => {
+    renderActivity('/activity?category=lifestyle');
+
+    // Initially filtered: only lifestyle rows.
+    expect(screen.queryByText("Mama's Kitchen")).not.toBeInTheDocument();
+    const chip = screen.getByRole('button', { name: /Clear filter/i });
+
+    await userEvent.click(chip);
+
+    // Chip is gone, all rows return.
+    expect(
+      screen.queryByRole('button', { name: /Clear filter/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Mama's Kitchen")).toBeInTheDocument();
+    expect(screen.getByText('Klinik Mediviron')).toBeInTheDocument();
+    expect(screen.getByText('Salary · Maybank')).toBeInTheDocument();
+  });
+
+  it('shows empty state when filter matches zero rows', () => {
+    // No activityMock row buckets to 'education' (no category contains
+    // 'education', 'course', 'skill', or 'training').
+    renderActivity('/activity?category=education');
+
+    expect(
+      screen.getByText(
+        /No receipts in this category yet — start by tapping ＋ to capture one\./,
+      ),
+    ).toBeInTheDocument();
+    // No transaction rows render.
+    expect(screen.queryByText("Mama's Kitchen")).not.toBeInTheDocument();
+    expect(screen.queryByText('Kinokuniya KLCC')).not.toBeInTheDocument();
+  });
+
+  it('?category=other-claimable filters to lhdn rows whose category does not bucket', () => {
+    renderActivity('/activity?category=other-claimable');
+
+    // None of the activityMock lhdn:true rows have a null categoryToCode
+    // (they all bucket to 'lifestyle' or 'medical_health'), so the empty
+    // state shows. Critically, the bucketed lhdn rows must NOT appear —
+    // proving the special case isn't "show all claimable".
+    expect(screen.queryByText('Kinokuniya KLCC')).not.toBeInTheDocument();
+    expect(screen.queryByText('Klinik Mediviron')).not.toBeInTheDocument();
+    expect(screen.queryByText('BookXcess Mid Valley')).not.toBeInTheDocument();
+    expect(screen.queryByText('Guardian Pharmacy')).not.toBeInTheDocument();
+    // And non-claimable rows must also NOT appear.
+    expect(screen.queryByText("Mama's Kitchen")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /No receipts in this category yet — start by tapping ＋ to capture one\./,
+      ),
+    ).toBeInTheDocument();
   });
 });

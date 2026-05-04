@@ -7,11 +7,12 @@
  * deferred until backend wiring lands. Data lives in src/mocks/seed.ts.
  */
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { CatIcon } from '@/components/CatIcon';
 import { activityMock } from '@/mocks/seed';
 import { useActivity } from '@/hooks/useActivity';
+import { categoryToCode } from '@/lib/supabase/queries/lhdn';
 
 const FILTERS = ['All', 'LHDN', 'Food', 'Transport', 'Medical', 'Books'] as const;
 type Filter = (typeof FILTERS)[number];
@@ -34,12 +35,37 @@ function formatForeign(currency: 'SGD' | 'USD', amount: number): string {
   })}`;
 }
 
+/**
+ * Render a URL ?category= code as a human-readable chip label.
+ * 'lifestyle_general' → 'Lifestyle general'
+ * 'medical_health'    → 'Medical health'
+ * 'other-claimable'   → 'Other claimable' (synthetic bucket)
+ */
+function categoryLabel(code: string): string {
+  const spaced = code.replace(/_/g, ' ').replace(/-/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 export default function Activity() {
   const [active, setActive] = useState<Filter>('All');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categoryFilter = searchParams.get('category');
   // Live data from supabase; falls back to the mock while loading or signed out.
   const { data = activityMock } = useActivity();
   const { summary, transactions, groups } = data;
+
+  // Apply ?category=<code> URL filter. When 'other-claimable', match rows
+  // that are claimable but don't bucket to any known LHDN code. Otherwise,
+  // bucket the row's free-text category through categoryToCode and compare.
+  const filteredTransactions = categoryFilter
+    ? transactions.filter((t) => {
+        if (categoryFilter === 'other-claimable') {
+          return t.lhdn === true && categoryToCode(t.category) === null;
+        }
+        return categoryToCode(t.category) === categoryFilter;
+      })
+    : transactions;
 
   return (
     <div className="text-ink" style={{ paddingBottom: 110 }}>
@@ -200,10 +226,51 @@ export default function Activity() {
         </div>
       </div>
 
+      {/* URL filter chip — sits above the day groups when ?category is set. */}
+      {categoryFilter && (
+        <div style={{ padding: '12px 16px 0' }}>
+          <button
+            type="button"
+            aria-label="Clear filter"
+            onClick={() => setSearchParams({})}
+            className="flex items-center font-semibold"
+            style={{
+              gap: 8,
+              padding: '7px 12px',
+              borderRadius: 999,
+              fontSize: 12,
+              background: '#E8DFFB',
+              color: '#5837C9',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <span>Filtered: {categoryLabel(categoryFilter)}</span>
+            <span aria-hidden style={{ opacity: 0.7 }}>·</span>
+            <span aria-hidden>✕</span>
+          </button>
+        </div>
+      )}
+
       {/* Grouped transactions */}
       <div style={{ padding: '16px 16px 0' }}>
+        {categoryFilter && filteredTransactions.length === 0 && (
+          <div
+            className="bg-surface"
+            style={{
+              padding: '20px 16px',
+              borderRadius: 16,
+              background: '#F1ECFB',
+              color: '#5B4FA8',
+              fontSize: 13,
+              textAlign: 'center',
+            }}
+          >
+            No receipts in this category yet — start by tapping ＋ to capture one.
+          </div>
+        )}
         {groups.map((g) => {
-          const items = transactions.filter((t) => t.day === g.key);
+          const items = filteredTransactions.filter((t) => t.day === g.key);
           if (items.length === 0) return null;
           return (
             <div key={g.key} style={{ marginBottom: 16 }}>

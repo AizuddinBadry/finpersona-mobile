@@ -20,7 +20,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Field } from '@/components/Field';
 import { Icon } from '@/components/Icon';
-import { useReceipt, useUpdateReceipt } from '@/hooks/useReceipt';
+import {
+  useDeleteReceipt,
+  useReceipt,
+  useUpdateReceipt,
+} from '@/hooks/useReceipt';
 import type { ReceiptRow, ReceiptUpdate } from '@/lib/supabase/queries/receiptDetail';
 
 const GRAD_HERO =
@@ -76,7 +80,14 @@ export default function ReceiptDetail() {
     return <NotFoundState />;
   }
 
-  return <LoadedState id={id} data={data} onBack={() => navigate(-1)} />;
+  return (
+    <LoadedState
+      id={id}
+      data={data}
+      onBack={() => navigate(-1)}
+      onDeleted={() => navigate('/activity')}
+    />
+  );
 }
 
 function SkeletonState() {
@@ -196,22 +207,28 @@ function LoadedState({
   id,
   data,
   onBack,
+  onDeleted,
 }: {
   id: string;
   data: ReceiptRow;
   onBack: () => void;
+  onDeleted: () => void;
 }) {
   const reasoning = data.extracted_data?.reasoning;
   const eligibility = data.extracted_data?.eligibility_explanation;
 
   const update = useUpdateReceipt();
+  const del = useDeleteReceipt();
   const [phase, setPhase] = useState<Phase>('view');
   const [editForm, setEditForm] = useState<Required<ReceiptUpdate> | null>(
     null,
   );
   const [savedToastVisible, setSavedToastVisible] = useState(false);
   const [saveError, setSaveError] = useState<Error | null>(null);
+  const [deleteConfirmPending, setDeleteConfirmPending] = useState(false);
+  const [deleteError, setDeleteError] = useState<Error | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clear any pending toast timer when the phase moves away from view, when
   // the component unmounts, or before scheduling a new toast.
@@ -222,8 +239,18 @@ function LoadedState({
     }
   }
 
+  function clearDeleteTimer() {
+    if (deleteTimerRef.current != null) {
+      clearTimeout(deleteTimerRef.current);
+      deleteTimerRef.current = null;
+    }
+  }
+
   useEffect(() => {
-    return () => clearToastTimer();
+    return () => {
+      clearToastTimer();
+      clearDeleteTimer();
+    };
   }, []);
 
   // If the user re-enters edit mode while a Saved toast is showing, drop it.
@@ -275,6 +302,37 @@ function LoadedState({
     setSaveError(null);
     update.reset();
     setPhase('edit');
+  }
+
+  const deleting = del.isPending;
+
+  function onDeleteTap() {
+    if (deleting) return;
+    if (!deleteConfirmPending) {
+      setDeleteConfirmPending(true);
+      clearDeleteTimer();
+      deleteTimerRef.current = setTimeout(() => {
+        setDeleteConfirmPending(false);
+        deleteTimerRef.current = null;
+      }, 3000);
+      return;
+    }
+    // Second tap — fire the mutation.
+    clearDeleteTimer();
+    void (async () => {
+      try {
+        await del.mutateAsync({ id });
+        onDeleted();
+      } catch (e) {
+        setDeleteError(e instanceof Error ? e : new Error(String(e)));
+        setDeleteConfirmPending(false);
+      }
+    })();
+  }
+
+  function dismissDeleteError() {
+    setDeleteError(null);
+    del.reset();
   }
 
   return (
@@ -383,6 +441,42 @@ function LoadedState({
         </div>
       )}
 
+      {/* Delete error banner */}
+      {deleteError && (
+        <div
+          role="alert"
+          style={{
+            margin: '0 16px 10px',
+            padding: '12px 14px',
+            borderRadius: 12,
+            background: '#FFE4E6',
+            color: '#9A1F2A',
+            fontSize: 13,
+            border: '0.5px solid rgba(214,52,64,0.30)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <span style={{ flex: 1, minWidth: 0 }}>{deleteError.message}</span>
+          <button
+            type="button"
+            onClick={dismissDeleteError}
+            className="font-bold"
+            style={{
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: 'none',
+              background: '#D63440',
+              color: '#fff',
+              fontSize: 12,
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Error banner */}
       {phase === 'error' && saveError && (
         <div
@@ -460,6 +554,42 @@ function LoadedState({
           )}
           {eligibility != null && (
             <CollapsibleRow title="Why eligible" body={eligibility} />
+          )}
+
+          {/* Delete row — only visible in view phase. */}
+          {phase === 'view' && (
+            <div
+              style={{
+                borderTop: '0.5px solid rgba(91,71,168,0.10)',
+                padding: 16,
+              }}
+            >
+              <button
+                type="button"
+                onClick={onDeleteTap}
+                disabled={deleting}
+                data-danger={deleteConfirmPending ? 'true' : 'false'}
+                className="font-bold"
+                style={{
+                  width: '100%',
+                  height: 44,
+                  borderRadius: 12,
+                  border: 'none',
+                  fontSize: 13,
+                  cursor: deleting ? 'default' : 'pointer',
+                  background: deleteConfirmPending ? '#D63440' : '#FFE4E6',
+                  color: deleteConfirmPending ? '#fff' : '#9A1F2A',
+                  opacity: deleting ? 0.7 : 1,
+                  letterSpacing: 0.2,
+                }}
+              >
+                {deleting
+                  ? 'Deleting…'
+                  : deleteConfirmPending
+                    ? 'Tap again to confirm'
+                    : 'Delete receipt'}
+              </button>
+            </div>
           )}
         </div>
       </div>

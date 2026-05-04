@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -31,6 +31,7 @@ type UpdateStub = {
 };
 
 let currentUpdate: UpdateStub;
+let currentDelete: DeleteStub;
 
 function makeUpdate(overrides: Partial<UpdateStub> = {}): UpdateStub {
   return {
@@ -44,17 +45,31 @@ function makeUpdate(overrides: Partial<UpdateStub> = {}): UpdateStub {
   };
 }
 
-vi.mock('@/hooks/useReceipt', () => ({
-  useReceipt: vi.fn(),
-  useUpdateReceipt: vi.fn(() => currentUpdate),
-  useDeleteReceipt: vi.fn(() => ({
+type DeleteStub = {
+  mutate: ReturnType<typeof vi.fn>;
+  mutateAsync: ReturnType<typeof vi.fn>;
+  isPending: boolean;
+  isError: boolean;
+  error: Error | null;
+  reset: ReturnType<typeof vi.fn>;
+};
+
+function makeDelete(overrides: Partial<DeleteStub> = {}): DeleteStub {
+  return {
     mutate: vi.fn(),
-    mutateAsync: vi.fn(),
+    mutateAsync: vi.fn().mockResolvedValue({ id: 'r-1' }),
     isPending: false,
     isError: false,
     error: null,
     reset: vi.fn(),
-  })),
+    ...overrides,
+  };
+}
+
+vi.mock('@/hooks/useReceipt', () => ({
+  useReceipt: vi.fn(),
+  useUpdateReceipt: vi.fn(() => currentUpdate),
+  useDeleteReceipt: vi.fn(() => currentDelete),
 }));
 
 import { useReceipt } from '@/hooks/useReceipt';
@@ -124,6 +139,11 @@ beforeEach(() => {
   navigate.mockReset();
   mockedUseReceipt.mockReset();
   currentUpdate = makeUpdate();
+  currentDelete = makeDelete();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('ReceiptDetail', () => {
@@ -308,5 +328,112 @@ describe('ReceiptDetail', () => {
       expect(cancelBtn).toBeDisabled();
       expect(saveBtn).toBeDisabled();
     });
+  });
+
+  // ── Task 7: two-tap delete ────────────────────────────────────────────────
+
+  it('first tap on Delete shows "Tap again to confirm" with danger styling', async () => {
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    const user = userEvent.setup();
+    renderScreen();
+
+    const deleteBtn = screen.getByRole('button', { name: /^Delete receipt$/i });
+    expect(deleteBtn).toBeInTheDocument();
+
+    await user.click(deleteBtn);
+
+    const confirmBtn = screen.getByRole('button', {
+      name: /Tap again to confirm/i,
+    });
+    expect(confirmBtn).toBeInTheDocument();
+    expect(confirmBtn).toHaveAttribute('data-danger', 'true');
+    expect(currentDelete.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('second tap calls deleteReceipt and navigates to /activity on success', async () => {
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByRole('button', { name: /^Delete receipt$/i }));
+    await user.click(
+      screen.getByRole('button', { name: /Tap again to confirm/i }),
+    );
+
+    expect(currentDelete.mutateAsync).toHaveBeenCalledWith({ id: 'r-1' });
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith('/activity'),
+    );
+  });
+
+  it('letting the 3000ms timer expire reverts the button to "Delete receipt"', async () => {
+    vi.useFakeTimers();
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    renderScreen();
+
+    // Use fireEvent (synchronous) for the click — userEvent v14's internals
+    // hang under fake timers because they await microtasks scheduled via
+    // setTimeout(0). fireEvent.click triggers the handler synchronously.
+    fireEvent.click(screen.getByRole('button', { name: /^Delete receipt$/i }));
+    expect(
+      screen.getByRole('button', { name: /Tap again to confirm/i }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    expect(
+      screen.getByRole('button', { name: /^Delete receipt$/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Tap again to confirm/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the error banner and does not navigate when delete fails', async () => {
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    currentDelete = makeDelete({
+      mutateAsync: vi.fn().mockRejectedValue(new Error('Network down')),
+    });
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByRole('button', { name: /^Delete receipt$/i }));
+    await user.click(
+      screen.getByRole('button', { name: /Tap again to confirm/i }),
+    );
+
+    await waitFor(() => {
+      const banner = screen.getByRole('alert');
+      expect(banner).toHaveTextContent(/Network down/);
+    });
+    expect(navigate).not.toHaveBeenCalledWith('/activity');
+
+    // Dismiss button is present.
+    expect(
+      screen.getByRole('button', { name: /^Dismiss$/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('does not throw or warn when unmounted before the 3000ms timer expires', async () => {
+    vi.useFakeTimers();
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const view = renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: /^Delete receipt$/i }));
+    expect(
+      screen.getByRole('button', { name: /Tap again to confirm/i }),
+    ).toBeInTheDocument();
+
+    expect(() => view.unmount()).not.toThrow();
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    expect(errSpy).not.toHaveBeenCalled();
+    errSpy.mockRestore();
   });
 });

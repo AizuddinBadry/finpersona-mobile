@@ -71,20 +71,22 @@ export function UtilizationDonut({
     claimedLen: number;
     headroomLen: number;
   }> = [];
-  for (const seg of drawable) {
-    const rawLen = (seg.cap / totalCap) * c;
-    // Reserve a 1px gap on the trailing edge of every segment.
-    const segmentLen = Math.max(rawLen - SEGMENT_GAP_PX, 0);
-    const claimedLen = clamp01(seg.claimed / seg.cap) * segmentLen;
-    const headroomLen = Math.max(segmentLen - claimedLen, 0);
-    segmentDraws.push({
-      seg,
-      offset: cursor,
-      segmentLen,
-      claimedLen,
-      headroomLen,
-    });
-    cursor += rawLen;
+  if (totalCap > 0) {
+    for (const seg of drawable) {
+      const rawLen = (seg.cap / totalCap) * c;
+      // Reserve a 1px gap on the trailing edge of every segment.
+      const segmentLen = Math.max(rawLen - SEGMENT_GAP_PX, 0);
+      const claimedLen = clamp01(seg.claimed / seg.cap) * segmentLen;
+      const headroomLen = Math.max(segmentLen - claimedLen, 0);
+      segmentDraws.push({
+        seg,
+        offset: cursor,
+        segmentLen,
+        claimedLen,
+        headroomLen,
+      });
+      cursor += rawLen;
+    }
   }
 
   return (
@@ -115,7 +117,7 @@ export function UtilizationDonut({
             fill="none"
           />
         ) : (
-          segmentDraws.map(({ seg, offset, segmentLen, claimedLen, headroomLen }) => {
+          segmentDraws.flatMap(({ seg, offset, claimedLen, headroomLen }) => {
             const out: JSX.Element[] = [];
             // Solid claimed arc (omitted when claimed === 0).
             if (claimedLen > 0) {

@@ -74,7 +74,7 @@ describe('UtilizationDonut', () => {
     expect(lifestylePaths.length).toBe(2);
     const opacities = lifestylePaths
       .map((p) => Number(p.getAttribute('stroke-opacity') ?? '1'))
-      .sort();
+      .sort((a, b) => a - b);
     expect(opacities[0]).toBeCloseTo(0.25, 5);
     expect(opacities[1]).toBeCloseTo(1, 5);
   });
@@ -104,6 +104,38 @@ describe('UtilizationDonut', () => {
       const opacity = Number(p.getAttribute('stroke-opacity') ?? '1');
       expect(opacity).toBeCloseTo(0.25, 5);
     }
+  });
+
+  it('claimed = NaN clamps to 0: only the faded path renders for that segment', () => {
+    const segments: Segment[] = [
+      { code: 'lifestyle', color: '#D97636', cap: 1000, claimed: Number.NaN },
+      { code: 'medical_health', color: '#1F8B7E', cap: 2000, claimed: 500 },
+    ];
+    const { container } = render(
+      <UtilizationDonut segments={segments} centerLabel="RM 500 of RM 3,000" />,
+    );
+    const lifestylePaths = Array.from(
+      container.querySelectorAll<SVGCircleElement>('circle[data-segment="lifestyle"]'),
+    );
+    expect(lifestylePaths.length).toBe(1);
+    const opacity = Number(lifestylePaths[0].getAttribute('stroke-opacity') ?? '1');
+    expect(opacity).toBeCloseTo(0.25, 5);
+  });
+
+  it('claimed = -50 clamps to 0: only the faded path renders for that segment', () => {
+    const segments: Segment[] = [
+      { code: 'lifestyle', color: '#D97636', cap: 1000, claimed: -50 },
+      { code: 'medical_health', color: '#1F8B7E', cap: 2000, claimed: 500 },
+    ];
+    const { container } = render(
+      <UtilizationDonut segments={segments} centerLabel="RM 500 of RM 3,000" />,
+    );
+    const lifestylePaths = Array.from(
+      container.querySelectorAll<SVGCircleElement>('circle[data-segment="lifestyle"]'),
+    );
+    expect(lifestylePaths.length).toBe(1);
+    const opacity = Number(lifestylePaths[0].getAttribute('stroke-opacity') ?? '1');
+    expect(opacity).toBeCloseTo(0.25, 5);
   });
 
   it('sum(cap) === 0: renders a faded fallback ring + center label, no segment paths', () => {

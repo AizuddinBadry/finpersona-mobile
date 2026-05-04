@@ -315,8 +315,8 @@ export default function Home() {
           }}
         >
           {[
-            { icon: 'transfer' as const, label: 'Transfer', to: '/cards' },
-            { icon: 'arrowDown' as const, label: 'Top up', to: '/cards' },
+            { icon: 'transfer' as const, label: 'Transfer', to: '/sources' },
+            { icon: 'arrowDown' as const, label: 'Top up', to: '/sources' },
             { icon: 'star' as const, label: 'Rewards', to: '/rewards' },
             { icon: 'receipt' as const, label: 'LHDN', to: '/lhdn' },
           ].map((q) => (

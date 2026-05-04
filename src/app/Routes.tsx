@@ -77,13 +77,14 @@ export default function AppRoutes() {
           }
         />
         <Route
-          path="/cards"
+          path="/sources"
           element={
             <Tab>
               <Cards />
             </Tab>
           }
         />
+        <Route path="/cards" element={<Navigate to="/sources" replace />} />
         <Route
           path="/advisor"
           element={

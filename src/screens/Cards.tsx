@@ -1,7 +1,7 @@
 /**
  * Cards — visual port of Finpersona-mobile-build/screens-3.jsx.
  *
- * Tab route at /cards. Stacked card carousel (primary card 200px, others
+ * Tab route at /sources. Stacked card carousel (primary card 200px, others
  * 88px peeks), quick-actions grid, move-money form (visual only — no
  * submit), and auto-deduct rules with toggle switches that flip on tap.
  */

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Cards from './Cards';
 
@@ -14,8 +14,25 @@ function renderCards() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/cards']}>
+      <MemoryRouter initialEntries={['/sources']}>
         <Cards />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+function renderWithRedirect(initialPath: string) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[initialPath]}>
+        <Routes>
+          <Route path="/sources" element={<Cards />} />
+          <Route
+            path="/cards"
+            element={<Navigate to="/sources" replace />}
+          />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -50,5 +67,14 @@ describe('Cards', () => {
     const initial = first.getAttribute('aria-checked');
     await userEvent.click(first);
     expect(first.getAttribute('aria-checked')).not.toBe(initial);
+  });
+
+  it('redirects /cards to /sources for backward compat', () => {
+    renderWithRedirect('/cards');
+    // If the redirect works, Cards is mounted at /sources and shows
+    // its existing "Accounts" heading (Task 3 will rename this).
+    expect(
+      screen.getByRole('heading', { name: 'Accounts' }),
+    ).toBeInTheDocument();
   });
 });

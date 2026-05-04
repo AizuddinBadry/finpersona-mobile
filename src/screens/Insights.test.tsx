@@ -207,6 +207,15 @@ describe('Insights — All-spend tab', () => {
     expect(screen.getByText(/RM 3,200/)).toBeInTheDocument();
   });
 
+  it('does NOT show the Claimable headroom card after switching', async () => {
+    const user = userEvent.setup();
+    renderInsights();
+    await switchToAllSpend(user);
+    expect(
+      screen.queryByText('REMAINING HEADROOM'),
+    ).not.toBeInTheDocument();
+  });
+
   it('navigates to /activity (no params) when Details link is tapped', async () => {
     const user = userEvent.setup();
     renderInsights();

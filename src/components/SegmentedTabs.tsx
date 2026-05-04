@@ -14,16 +14,19 @@ type SegmentedTabsProps<T extends string> = {
   options: ReadonlyArray<{ readonly value: T; readonly label: string }>;
   value: T;
   onChange: (next: T) => void;
+  ariaLabel?: string;
 };
 
 export function SegmentedTabs<T extends string>({
   options,
   value,
   onChange,
+  ariaLabel,
 }: SegmentedTabsProps<T>) {
   return (
     <div
       role="tablist"
+      aria-label={ariaLabel}
       style={{
         display: 'inline-flex',
         alignItems: 'center',

@@ -14,7 +14,7 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Icon, type IconName } from '@/components/Icon';
+import { Icon } from '@/components/Icon';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
 import { UtilizationDonut } from '@/components/UtilizationDonut';
 import { useClaimableInsights, useInsights } from '@/hooks/useInsights';
@@ -112,6 +112,7 @@ export default function Insights() {
           options={TAB_OPTIONS}
           value={tab}
           onChange={setTab}
+          ariaLabel="Insights view"
         />
       </div>
 
@@ -261,7 +262,7 @@ function ClaimableRow({
   isLast: boolean;
   onClick: () => void;
 }) {
-  const isOther = category.code === 'other-claimable' || category.cap === 0;
+  const isOther = category.cap === 0;
   const fillPct = isOther ? 0 : Math.min(category.pct * 100, 100);
   const trackBg = isOther ? 'rgba(160,160,182,0.20)' : '#E8DFFB';
 
@@ -275,14 +276,11 @@ function ClaimableRow({
         width: '100%',
         gap: 12,
         padding: '12px 14px',
+        background: 'transparent',
+        border: 'none',
         borderBottom: isLast
           ? 'none'
           : '0.5px solid rgba(91,71,168,0.08)',
-        background: 'transparent',
-        border: isLast ? 'none' : undefined,
-        borderLeft: 'none',
-        borderRight: 'none',
-        borderTop: 'none',
         cursor: 'pointer',
         textAlign: 'left',
       }}
@@ -299,7 +297,7 @@ function ClaimableRow({
         }}
       >
         <Icon
-          name={category.icon as IconName}
+          name={category.icon}
           size={18}
           color={category.color}
           strokeWidth={2}

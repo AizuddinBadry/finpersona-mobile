@@ -62,4 +62,16 @@ describe('SegmentedTabs', () => {
     );
     expect(getByRole('tablist')).toBeInTheDocument();
   });
+
+  it('exposes the ariaLabel prop as the tablist accessible name', () => {
+    const { getByRole } = render(
+      <SegmentedTabs<Mode>
+        options={OPTIONS}
+        value="claimable"
+        onChange={() => {}}
+        ariaLabel="Insights view"
+      />,
+    );
+    expect(getByRole('tablist', { name: 'Insights view' })).toBeInTheDocument();
+  });
 });

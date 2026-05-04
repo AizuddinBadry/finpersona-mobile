@@ -18,7 +18,7 @@ import type {
   InsightsCategory,
   InsightsMock,
 } from '@/mocks/seed';
-import { insightsMock } from '@/mocks/seed';
+import { claimableInsightsMock, insightsMock } from '@/mocks/seed';
 import {
   categoryToCode,
   fetchActiveTaxCategories,
@@ -215,6 +215,13 @@ export async function fetchClaimableInsights(
       .lte('receipt_date', end),
   ]);
   if (recRes.error) throw recRes.error;
+
+  if (categoryRows.length === 0) {
+    // tax_categories not seeded for this year (e.g. mid-rollover before the
+    // new YA is populated) — fall back to mock so the donut still renders
+    // demo data instead of an empty fallback ring. Mirrors fetchLhdn.
+    return claimableInsightsMock;
+  }
 
   const receipts = (recRes.data ?? []) as ClaimableReceiptRow[];
 

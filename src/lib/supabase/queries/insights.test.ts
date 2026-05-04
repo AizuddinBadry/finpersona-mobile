@@ -171,6 +171,7 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 import { fetchClaimableInsights } from '@/lib/supabase/queries/insights';
+import { claimableInsightsMock } from '@/mocks/seed';
 
 const taxCats2026 = [
   { id: 'tc1', code: 'lifestyle', name: 'Lifestyle', max_relief: '2500', tax_year: 2026, sort_order: 1 },
@@ -322,6 +323,17 @@ describe('fetchClaimableInsights', () => {
     const out = await fetchClaimableInsights('u1', 2026);
 
     expect(out.categoryCount).toBe(3);
+  });
+
+  it('falls back to claimableInsightsMock when tax_categories returns zero rows for the year', async () => {
+    // tax_categories not seeded for this year (e.g. mid-rollover before the
+    // new YA is populated) — should mirror fetchLhdn's empty-list fallback.
+    fetchActiveTaxCategoriesMock.mockResolvedValue([]);
+    lteRecMock.mockResolvedValue({ data: [], error: null });
+
+    const out = await fetchClaimableInsights('u1', 2099);
+
+    expect(out).toBe(claimableInsightsMock);
   });
 
   it('totals are internally consistent (totalCap excludes Other; headroom clamped >= 0)', async () => {

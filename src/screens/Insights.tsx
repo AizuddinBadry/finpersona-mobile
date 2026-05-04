@@ -137,6 +137,9 @@ export default function Insights() {
           areaPrevious={areaPrevious}
           categories={categories}
           forecast={forecast}
+          // No ?category= here on purpose: Activity's filter expects LHDN
+          // codes (what categoryToCode returns), not the All-spend bucket
+          // labels (Dining/Transport) used by the by-category bars.
           onDetails={() => navigate('/activity')}
         />
       )}

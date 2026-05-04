@@ -164,6 +164,7 @@ export function useCaptureFlow(deps: CaptureFlowDeps = {}) {
       // The new row affects every screen that aggregates from receipts.
       qc.invalidateQueries({ queryKey: ['home'] });
       qc.invalidateQueries({ queryKey: ['insights'] });
+      qc.invalidateQueries({ queryKey: ['insights-claimable'] });
       qc.invalidateQueries({ queryKey: ['lhdn'] });
       qc.invalidateQueries({ queryKey: ['rewards'] });
       setState((s) => ({ ...s, phase: 'done', insertedId: id }));

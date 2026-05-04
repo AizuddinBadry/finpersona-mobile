@@ -58,6 +58,7 @@ function aggregateKeys(uid: string): Array<readonly [string, string]> {
     ['activity', uid],
     ['home', uid],
     ['insights', uid],
+    ['insights-claimable', uid],
     ['lhdn', uid],
     ['rewards', uid],
   ];

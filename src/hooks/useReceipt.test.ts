@@ -75,7 +75,7 @@ describe('useReceipt', () => {
 });
 
 describe('useUpdateReceipt', () => {
-  it('calls updateReceipt with merged userId and invalidates all 6 keys', async () => {
+  it('calls updateReceipt with merged userId and invalidates all 7 keys', async () => {
     const { qc, wrapper } = makeWrapper();
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
     const updateReceipt = vi.fn().mockResolvedValue(sampleRow);
@@ -100,6 +100,7 @@ describe('useUpdateReceipt', () => {
     expect(keys).toContainEqual(['activity', 'user-1']);
     expect(keys).toContainEqual(['home', 'user-1']);
     expect(keys).toContainEqual(['insights', 'user-1']);
+    expect(keys).toContainEqual(['insights-claimable', 'user-1']);
     expect(keys).toContainEqual(['lhdn', 'user-1']);
     expect(keys).toContainEqual(['rewards', 'user-1']);
     expect(keys).toContainEqual(['receipt', 'r-1']);
@@ -124,7 +125,7 @@ describe('useUpdateReceipt', () => {
 });
 
 describe('useDeleteReceipt', () => {
-  it('calls deleteReceipt with userId and invalidates exactly 5 keys (no receipt key)', async () => {
+  it('calls deleteReceipt with userId and invalidates exactly 6 keys (no receipt key)', async () => {
     const { qc, wrapper } = makeWrapper();
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
     const deleteReceipt = vi.fn().mockResolvedValue({ id: 'r-1' });
@@ -145,11 +146,12 @@ describe('useDeleteReceipt', () => {
     expect(keys).toContainEqual(['activity', 'user-1']);
     expect(keys).toContainEqual(['home', 'user-1']);
     expect(keys).toContainEqual(['insights', 'user-1']);
+    expect(keys).toContainEqual(['insights-claimable', 'user-1']);
     expect(keys).toContainEqual(['lhdn', 'user-1']);
     expect(keys).toContainEqual(['rewards', 'user-1']);
     // Caller is navigating away — receipt detail cache is left alone.
     expect(keys).not.toContainEqual(['receipt', 'r-1']);
-    expect(keys).toHaveLength(5);
+    expect(keys).toHaveLength(6);
   });
 
   it('surfaces errors when the mutation rejects', async () => {

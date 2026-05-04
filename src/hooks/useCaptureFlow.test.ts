@@ -193,7 +193,9 @@ describe('useCaptureFlow', () => {
     );
     // Receipt insert should bust the dependent query keys.
     const keys = invalidateSpy.mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0]);
-    expect(keys).toEqual(expect.arrayContaining(['home', 'insights', 'lhdn', 'rewards']));
+    expect(keys).toEqual(
+      expect.arrayContaining(['home', 'insights', 'insights-claimable', 'lhdn', 'rewards']),
+    );
   });
 
   it('captures insert errors into the error phase', async () => {

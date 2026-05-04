@@ -7,7 +7,7 @@
  * deferred until backend wiring lands. Data lives in src/mocks/seed.ts.
  */
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { CatIcon } from '@/components/CatIcon';
 import { activityMock } from '@/mocks/seed';
@@ -36,6 +36,7 @@ function formatForeign(currency: 'SGD' | 'USD', amount: number): string {
 
 export default function Activity() {
   const [active, setActive] = useState<Filter>('All');
+  const navigate = useNavigate();
   // Live data from supabase; falls back to the mock while loading or signed out.
   const { data = activityMock } = useActivity();
   const { summary, transactions, groups } = data;
@@ -228,12 +229,20 @@ export default function Activity() {
                 {items.map((t, i) => {
                   const isIncome = t.amount > 0;
                   return (
-                    <div
+                    <button
                       key={t.id}
+                      type="button"
+                      aria-label={`View receipt ${t.name}`}
+                      onClick={() => navigate(`/receipts/${t.id}`)}
                       className="flex items-center"
                       style={{
+                        width: '100%',
                         gap: 12,
                         padding: '13px 14px',
+                        background: 'transparent',
+                        border: 'none',
+                        textAlign: 'left',
+                        cursor: 'pointer',
                         borderBottom:
                           i < items.length - 1
                             ? '0.5px solid rgba(91,71,168,0.08)'
@@ -295,7 +304,7 @@ export default function Activity() {
                           </div>
                         )}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

@@ -10,6 +10,13 @@ vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({ user: null }),
 }));
 
+const navigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const mod =
+    await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return { ...mod, useNavigate: () => navigate };
+});
+
 function renderActivity() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -61,5 +68,18 @@ describe('Activity', () => {
 
     expect(lhdn).toHaveAttribute('aria-pressed', 'true');
     expect(all).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('navigates to /receipts/:id when a receipt row is tapped', async () => {
+    navigate.mockClear();
+    renderActivity();
+
+    // First receipt row in the mock is "Mama's Kitchen" (id: 'a1').
+    const row = screen.getByRole('button', {
+      name: /View receipt Mama's Kitchen/i,
+    });
+    await userEvent.click(row);
+
+    expect(navigate).toHaveBeenCalledWith('/receipts/a1');
   });
 });

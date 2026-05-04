@@ -23,7 +23,7 @@ const ITEMS: Item[] = [
   { id: 'home', icon: 'home', label: 'Home', to: '/' },
   { id: 'chart', icon: 'chart', label: 'Insights', to: '/insights' },
   { id: 'fab', icon: 'camera', label: 'Capture', to: '/capture', fab: true },
-  { id: 'cards', icon: 'cards', label: 'Cards', to: '/cards' },
+  { id: 'cards', icon: 'cards', label: 'Sources', to: '/cards' },
   { id: 'bot', icon: 'bot', label: 'Advisor', to: '/advisor' },
 ];
 

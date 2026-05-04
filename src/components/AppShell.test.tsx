@@ -21,7 +21,7 @@ describe('AppShell', () => {
 
   it('renders all five bottom-nav labels', () => {
     renderShell();
-    for (const label of ['Home', 'Insights', 'Capture', 'Cards', 'Advisor']) {
+    for (const label of ['Home', 'Insights', 'Capture', 'Sources', 'Advisor']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });

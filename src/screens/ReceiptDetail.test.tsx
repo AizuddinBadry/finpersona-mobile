@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { UseQueryResult } from '@tanstack/react-query';
@@ -20,16 +20,33 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Mock the receipt hook directly so tests don't need a real Supabase chain.
-vi.mock('@/hooks/useReceipt', () => ({
-  useReceipt: vi.fn(),
-  useUpdateReceipt: vi.fn(() => ({
+// useUpdateReceipt is controllable per-test via setUpdateMock below.
+type UpdateStub = {
+  mutate: ReturnType<typeof vi.fn>;
+  mutateAsync: ReturnType<typeof vi.fn>;
+  isPending: boolean;
+  isError: boolean;
+  error: Error | null;
+  reset: ReturnType<typeof vi.fn>;
+};
+
+let currentUpdate: UpdateStub;
+
+function makeUpdate(overrides: Partial<UpdateStub> = {}): UpdateStub {
+  return {
     mutate: vi.fn(),
-    mutateAsync: vi.fn(),
+    mutateAsync: vi.fn().mockResolvedValue({}),
     isPending: false,
     isError: false,
     error: null,
     reset: vi.fn(),
-  })),
+    ...overrides,
+  };
+}
+
+vi.mock('@/hooks/useReceipt', () => ({
+  useReceipt: vi.fn(),
+  useUpdateReceipt: vi.fn(() => currentUpdate),
   useDeleteReceipt: vi.fn(() => ({
     mutate: vi.fn(),
     mutateAsync: vi.fn(),
@@ -106,6 +123,7 @@ function renderScreen() {
 beforeEach(() => {
   navigate.mockReset();
   mockedUseReceipt.mockReset();
+  currentUpdate = makeUpdate();
 });
 
 describe('ReceiptDetail', () => {
@@ -165,5 +183,130 @@ describe('ReceiptDetail', () => {
     expect(
       screen.getByText('Detected book purchase based on line items.'),
     ).toBeInTheDocument();
+  });
+
+  // ── Task 6: edit / save / cancel ──────────────────────────────────────────
+
+  it('tapping Edit reveals editable inputs and swaps header to Cancel/Save', async () => {
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByRole('button', { name: /^Edit$/i }));
+
+    // Merchant input is now editable.
+    const merchantInput = screen.getByLabelText(/Merchant/i);
+    expect(merchantInput).toBeInTheDocument();
+    expect(merchantInput).toHaveValue('Kinokuniya KLCC');
+
+    // Header swaps to Cancel + Save; back arrow gone.
+    expect(screen.getByRole('button', { name: /^Cancel$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Save$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Back$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Edit$/i })).not.toBeInTheDocument();
+  });
+
+  it('tapping Cancel returns to view without calling mutateAsync', async () => {
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByRole('button', { name: /^Edit$/i }));
+    expect(screen.getByLabelText(/Merchant/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Cancel$/i }));
+
+    expect(screen.queryByLabelText(/Merchant/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Edit$/i })).toBeInTheDocument();
+    expect(currentUpdate.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('editing merchant then Save calls mutateAsync with the full edited form and returns to view', async () => {
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByRole('button', { name: /^Edit$/i }));
+
+    const merchantInput = screen.getByLabelText(/Merchant/i);
+    await user.clear(merchantInput);
+    await user.type(merchantInput, 'New Merchant');
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => {
+      expect(currentUpdate.mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'r-1',
+          merchantName: 'New Merchant',
+          receiptDate: '2026-04-15',
+          totalAmount: 142.5,
+          currency: 'MYR',
+          category: 'Books',
+          isClaimable: true,
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^Edit$/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText(/Merchant/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a Saved toast after a successful save', async () => {
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByRole('button', { name: /^Edit$/i }));
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/^Saved$/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows an error banner and keeps the user in edit phase on save failure', async () => {
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    currentUpdate = makeUpdate({
+      mutateAsync: vi.fn().mockRejectedValue(new Error('Network down')),
+    });
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByRole('button', { name: /^Edit$/i }));
+
+    const merchantInput = screen.getByLabelText(/Merchant/i);
+    await user.clear(merchantInput);
+    await user.type(merchantInput, 'Half edit');
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Network down/)).toBeInTheDocument();
+    });
+
+    // Edits preserved — input still on screen with the typed value.
+    expect(screen.getByLabelText(/Merchant/i)).toHaveValue('Half edit');
+  });
+
+  it('disables Cancel and Save while the mutation is pending', () => {
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    currentUpdate = makeUpdate({ isPending: true });
+    renderScreen();
+
+    // Force the edit form open by simulating an in-flight save: the screen
+    // shows Cancel + Save buttons in both 'edit' and 'saving' phases. To
+    // exercise the disabled state without calling mutateAsync (which is the
+    // only way to enter 'saving'), we render with isPending true and click
+    // Edit so the header shows the two buttons; both should reflect the
+    // pending mutation by being disabled.
+    return userEvent.setup().click(screen.getByRole('button', { name: /^Edit$/i })).then(() => {
+      const cancelBtn = screen.getByRole('button', { name: /^Cancel$/i });
+      const saveBtn = screen.getByRole('button', { name: /^Save$/i });
+      expect(cancelBtn).toBeDisabled();
+      expect(saveBtn).toBeDisabled();
+    });
   });
 });

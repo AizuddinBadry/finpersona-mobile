@@ -1,18 +1,32 @@
 /**
- * ReceiptDetail — view-only phase (Task 5).
+ * ReceiptDetail — view + inline edit (Tasks 5 + 6).
  *
  * Reads /receipts/:id, renders merchant / date / total / category / claimable
  * plus two collapsible rationale sections sourced from
  * `extracted_data.reasoning` and `extracted_data.eligibility_explanation`.
  *
- * Edit and delete handlers are intentionally absent for this task — the Edit
- * button is a no-op placeholder that lights up in T6.
+ * Task 6 wires the Edit button to a small state machine:
+ *
+ *   view ── Edit ──▶ edit ── Save ──▶ saving ──▶ view (+ "Saved" toast)
+ *                       ▲                  │
+ *                       │                  ▼
+ *                       └──── error ◀──── (mutateAsync rejects)
+ *
+ * On error the user's edits stay intact so they can retry without retyping.
+ * AI reasoning + eligibility stay read-only even in edit mode (still tappable
+ * to expand, but not editable).
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Field } from '@/components/Field';
 import { Icon } from '@/components/Icon';
-import { useReceipt } from '@/hooks/useReceipt';
-import type { ReceiptRow } from '@/lib/supabase/queries/receiptDetail';
+import { useReceipt, useUpdateReceipt } from '@/hooks/useReceipt';
+import type { ReceiptRow, ReceiptUpdate } from '@/lib/supabase/queries/receiptDetail';
+
+const GRAD_HERO =
+  'linear-gradient(135deg, #6E4CE6 0%, #9B7BF1 60%, #C9BAFB 100%)';
+
+type Phase = 'view' | 'edit' | 'saving' | 'error';
 
 function formatTotal(amount: number, currency: string): string {
   if (currency === 'MYR') {
@@ -38,6 +52,17 @@ function formatReceiptDate(yyyyMmDd: string): string {
   });
 }
 
+function rowToForm(row: ReceiptRow): Required<ReceiptUpdate> {
+  return {
+    merchantName: row.merchant_name,
+    receiptDate: row.receipt_date,
+    totalAmount: Number(row.total_amount),
+    currency: row.currency,
+    category: row.category ?? '',
+    isClaimable: row.is_claimable,
+  };
+}
+
 export default function ReceiptDetail() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -51,7 +76,7 @@ export default function ReceiptDetail() {
     return <NotFoundState />;
   }
 
-  return <LoadedState data={data} onBack={() => navigate(-1)} />;
+  return <LoadedState id={id} data={data} onBack={() => navigate(-1)} />;
 }
 
 function SkeletonState() {
@@ -168,14 +193,89 @@ function NotFoundState() {
 }
 
 function LoadedState({
+  id,
   data,
   onBack,
 }: {
+  id: string;
   data: ReceiptRow;
   onBack: () => void;
 }) {
   const reasoning = data.extracted_data?.reasoning;
   const eligibility = data.extracted_data?.eligibility_explanation;
+
+  const update = useUpdateReceipt();
+  const [phase, setPhase] = useState<Phase>('view');
+  const [editForm, setEditForm] = useState<Required<ReceiptUpdate> | null>(
+    null,
+  );
+  const [savedToastVisible, setSavedToastVisible] = useState(false);
+  const [saveError, setSaveError] = useState<Error | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear any pending toast timer when the phase moves away from view, when
+  // the component unmounts, or before scheduling a new toast.
+  function clearToastTimer() {
+    if (toastTimerRef.current != null) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+  }
+
+  useEffect(() => {
+    return () => clearToastTimer();
+  }, []);
+
+  // If the user re-enters edit mode while a Saved toast is showing, drop it.
+  useEffect(() => {
+    if (phase !== 'view' && savedToastVisible) {
+      clearToastTimer();
+      setSavedToastVisible(false);
+    }
+  }, [phase, savedToastVisible]);
+
+  const editing = phase === 'edit' || phase === 'saving' || phase === 'error';
+  const saving = phase === 'saving' || update.isPending;
+
+  function startEdit() {
+    setEditForm(rowToForm(data));
+    setPhase('edit');
+  }
+
+  function cancelEdit() {
+    setEditForm(null);
+    setSaveError(null);
+    update.reset();
+    setPhase('view');
+  }
+
+  async function saveEdit() {
+    if (editForm == null) return;
+    setSaveError(null);
+    setPhase('saving');
+    try {
+      await update.mutateAsync({ id, ...editForm });
+      setEditForm(null);
+      setPhase('view');
+      // Schedule the Saved toast.
+      clearToastTimer();
+      setSavedToastVisible(true);
+      toastTimerRef.current = setTimeout(() => {
+        setSavedToastVisible(false);
+        toastTimerRef.current = null;
+      }, 1500);
+    } catch (e) {
+      // Keep editForm intact so the user's edits aren't lost.
+      setSaveError(e instanceof Error ? e : new Error(String(e)));
+      setPhase('error');
+    }
+  }
+
+  function dismissError() {
+    setSaveError(null);
+    update.reset();
+    setPhase('edit');
+  }
 
   return (
     <div className="text-ink" style={{ paddingBottom: 110 }}>
@@ -184,41 +284,140 @@ function LoadedState({
         className="flex items-center justify-between"
         style={{ padding: '4px 20px 12px' }}
       >
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back"
-          className="flex items-center justify-center bg-surface text-ink2 shadow-card"
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            border: '0.5px solid rgba(91,71,168,0.10)',
-          }}
-        >
-          <Icon name="arrowLeft" size={17} color="#39314F" />
-        </button>
+        {editing ? (
+          <button
+            type="button"
+            onClick={cancelEdit}
+            disabled={saving}
+            aria-label="Cancel"
+            className="font-semibold text-ink2 bg-surface shadow-card"
+            style={{
+              height: 36,
+              padding: '0 14px',
+              borderRadius: 18,
+              border: '0.5px solid rgba(91,71,168,0.10)',
+              fontSize: 13,
+              opacity: saving ? 0.5 : 1,
+            }}
+          >
+            Cancel
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back"
+            className="flex items-center justify-center bg-surface text-ink2 shadow-card"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              border: '0.5px solid rgba(91,71,168,0.10)',
+            }}
+          >
+            <Icon name="arrowLeft" size={17} color="#39314F" />
+          </button>
+        )}
         <h1
           className="text-ink"
           style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.3 }}
         >
           Receipt
         </h1>
-        <button
-          type="button"
-          aria-label="Edit"
-          className="font-semibold text-purple bg-surface shadow-card"
+        {editing ? (
+          <button
+            type="button"
+            onClick={saveEdit}
+            disabled={saving}
+            aria-label="Save"
+            className="font-bold text-white shadow-purpleGlow"
+            style={{
+              height: 36,
+              padding: '0 16px',
+              borderRadius: 18,
+              border: 'none',
+              fontSize: 13,
+              background: GRAD_HERO,
+              opacity: saving ? 0.7 : 1,
+            }}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={startEdit}
+            aria-label="Edit"
+            className="font-semibold text-purple bg-surface shadow-card"
+            style={{
+              height: 36,
+              padding: '0 14px',
+              borderRadius: 18,
+              border: '0.5px solid rgba(91,71,168,0.10)',
+              fontSize: 13,
+            }}
+          >
+            Edit
+          </button>
+        )}
+      </div>
+
+      {/* Saved toast */}
+      {savedToastVisible && (
+        <div
+          role="status"
+          aria-live="polite"
           style={{
-            height: 36,
-            padding: '0 14px',
-            borderRadius: 18,
-            border: '0.5px solid rgba(91,71,168,0.10)',
+            margin: '0 16px 10px',
+            padding: '10px 14px',
+            borderRadius: 12,
+            background: '#D6F5E5',
+            color: '#0E7C4F',
             fontSize: 13,
+            fontWeight: 600,
+            textAlign: 'center',
+            border: '0.5px solid rgba(31,181,115,0.30)',
           }}
         >
-          Edit
-        </button>
-      </div>
+          Saved
+        </div>
+      )}
+
+      {/* Error banner */}
+      {phase === 'error' && saveError && (
+        <div
+          role="alert"
+          style={{
+            margin: '0 16px 10px',
+            padding: '12px 14px',
+            borderRadius: 12,
+            background: '#FFE4E6',
+            color: '#9A1F2A',
+            fontSize: 13,
+            border: '0.5px solid rgba(214,52,64,0.30)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          <span style={{ flex: 1, minWidth: 0 }}>{saveError.message}</span>
+          <button
+            type="button"
+            onClick={dismissError}
+            className="font-bold"
+            style={{
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: 'none',
+              background: '#D63440',
+              color: '#fff',
+              fontSize: 12,
+            }}
+          >
+            OK
+          </button>
+        </div>
+      )}
 
       {/* Card body */}
       <div style={{ padding: '0 16px' }}>
@@ -230,7 +429,7 @@ function LoadedState({
             overflow: 'hidden',
           }}
         >
-          {/* Image */}
+          {/* Image (always read-only) */}
           {data.image_url && (
             <img
               src={data.image_url}
@@ -245,77 +444,17 @@ function LoadedState({
             />
           )}
 
-          <div style={{ padding: 18 }}>
-            {/* Merchant */}
-            <div
-              className="font-bold text-ink"
-              style={{ fontSize: 20, letterSpacing: -0.4 }}
-            >
-              {data.merchant_name}
-            </div>
-            <div
-              className="text-muted"
-              style={{ fontSize: 12, marginTop: 4 }}
-            >
-              {formatReceiptDate(data.receipt_date)}
-            </div>
+          {editing && editForm ? (
+            <EditBody
+              form={editForm}
+              onChange={setEditForm}
+              disabled={saving}
+            />
+          ) : (
+            <ViewBody data={data} />
+          )}
 
-            {/* Total */}
-            <div
-              className="font-bold text-ink"
-              style={{
-                marginTop: 14,
-                fontSize: 28,
-                letterSpacing: -0.6,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {formatTotal(data.total_amount, data.currency)}
-            </div>
-
-            {/* Chips row */}
-            <div
-              className="flex items-center"
-              style={{ gap: 8, marginTop: 14, flexWrap: 'wrap' }}
-            >
-              {data.category && (
-                <span
-                  className="font-semibold"
-                  style={{
-                    fontSize: 11,
-                    color: '#5837C9',
-                    background: '#E8DFFB',
-                    padding: '5px 10px',
-                    borderRadius: 999,
-                    letterSpacing: 0.2,
-                  }}
-                >
-                  {data.category}
-                </span>
-              )}
-              <span
-                className="font-semibold"
-                style={{
-                  fontSize: 11,
-                  color: data.is_claimable ? '#1FB573' : '#7A7392',
-                  background: data.is_claimable ? '#D6F5E5' : '#F1ECFB',
-                  padding: '5px 10px',
-                  borderRadius: 999,
-                  letterSpacing: 0.2,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-              >
-                <span data-testid="receipt-claimable">
-                  {data.is_claimable ? '✓' : '—'}
-                </span>
-                LHDN claimable
-              </span>
-            </div>
-          </div>
-
-          {/* Collapsible rationale sections */}
+          {/* Collapsible rationale sections — read-only in both phases. */}
           {reasoning != null && (
             <CollapsibleRow title="AI reasoning" body={reasoning} />
           )}
@@ -324,6 +463,199 @@ function LoadedState({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ViewBody({ data }: { data: ReceiptRow }) {
+  return (
+    <div style={{ padding: 18 }}>
+      {/* Merchant */}
+      <div
+        className="font-bold text-ink"
+        style={{ fontSize: 20, letterSpacing: -0.4 }}
+      >
+        {data.merchant_name}
+      </div>
+      <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+        {formatReceiptDate(data.receipt_date)}
+      </div>
+
+      {/* Total */}
+      <div
+        className="font-bold text-ink"
+        style={{
+          marginTop: 14,
+          fontSize: 28,
+          letterSpacing: -0.6,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {formatTotal(data.total_amount, data.currency)}
+      </div>
+
+      {/* Chips row */}
+      <div
+        className="flex items-center"
+        style={{ gap: 8, marginTop: 14, flexWrap: 'wrap' }}
+      >
+        {data.category && (
+          <span
+            className="font-semibold"
+            style={{
+              fontSize: 11,
+              color: '#5837C9',
+              background: '#E8DFFB',
+              padding: '5px 10px',
+              borderRadius: 999,
+              letterSpacing: 0.2,
+            }}
+          >
+            {data.category}
+          </span>
+        )}
+        <span
+          className="font-semibold"
+          style={{
+            fontSize: 11,
+            color: data.is_claimable ? '#1FB573' : '#7A7392',
+            background: data.is_claimable ? '#D6F5E5' : '#F1ECFB',
+            padding: '5px 10px',
+            borderRadius: 999,
+            letterSpacing: 0.2,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <span data-testid="receipt-claimable">
+            {data.is_claimable ? '✓' : '—'}
+          </span>
+          LHDN claimable
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function EditBody({
+  form,
+  onChange,
+  disabled,
+}: {
+  form: Required<ReceiptUpdate>;
+  onChange: (next: Required<ReceiptUpdate>) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div style={{ padding: 18 }}>
+      <fieldset
+        disabled={disabled}
+        style={{ border: 'none', padding: 0, margin: 0 }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Field
+            label="Merchant"
+            value={form.merchantName}
+            onChange={(v) => onChange({ ...form, merchantName: v })}
+          />
+          <Field
+            label="Date"
+            type="date"
+            value={form.receiptDate}
+            onChange={(v) => onChange({ ...form, receiptDate: v })}
+          />
+          <Field
+            label="Total"
+            type="number"
+            value={String(form.totalAmount)}
+            onChange={(v) =>
+              onChange({ ...form, totalAmount: Number(v) || 0 })
+            }
+          />
+          <Field
+            label="Currency"
+            value={form.currency}
+            onChange={(v) => onChange({ ...form, currency: v })}
+          />
+          <Field
+            label="Category"
+            value={form.category}
+            onChange={(v) => onChange({ ...form, category: v })}
+          />
+        </div>
+
+        {/* LHDN claimable toggle — matches Capture's switch pattern. */}
+        <div
+          className="flex items-center"
+          style={{
+            marginTop: 12,
+            padding: '12px 14px',
+            borderRadius: 12,
+            background: 'linear-gradient(135deg, #F5F2FE, #EDE7FB)',
+            border: '1px solid rgba(91,71,168,0.10)',
+            gap: 10,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              className="font-bold"
+              style={{
+                fontSize: 12,
+                color: '#5837C9',
+                letterSpacing: 0.3,
+                textTransform: 'uppercase',
+              }}
+            >
+              LHDN claimable
+            </div>
+            <div
+              style={{
+                fontSize: 12,
+                color: '#39314F',
+                fontWeight: 500,
+                marginTop: 1,
+              }}
+            >
+              Tag this receipt under your tax relief totals.
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.isClaimable}
+            aria-label="Tag as LHDN claimable"
+            onClick={() =>
+              onChange({ ...form, isClaimable: !form.isClaimable })
+            }
+            style={{
+              width: 36,
+              height: 22,
+              borderRadius: 11,
+              background: form.isClaimable ? '#6E4CE6' : '#D8D2E8',
+              position: 'relative',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left: form.isClaimable ? 16 : 2,
+                top: 2,
+                width: 18,
+                height: 18,
+                borderRadius: 9,
+                background: '#fff',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                transition: 'left 0.2s',
+              }}
+            />
+          </button>
+        </div>
+      </fieldset>
     </div>
   );
 }

@@ -169,14 +169,25 @@ export function shapeLhdn(
 
 const DEFAULT_TAX_YEAR = 2025;
 
+/**
+ * Read the active tax_categories rows for a given assessment year. Shared by
+ * fetchLhdn and the insights-claimable query so the two callers stay in sync
+ * on the column list and filter shape.
+ */
+export async function fetchActiveTaxCategories(taxYear: number): Promise<TaxCategoryRow[]> {
+  const { data, error } = await supabase
+    .from('tax_categories')
+    .select('id, code, name, max_relief, tax_year, sort_order')
+    .eq('is_active', true)
+    .eq('tax_year', taxYear)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as TaxCategoryRow[];
+}
+
 export async function fetchLhdn(userId: string, taxYear = DEFAULT_TAX_YEAR): Promise<LhdnMock> {
-  const [catsRes, recRes] = await Promise.all([
-    supabase
-      .from('tax_categories')
-      .select('id, code, name, max_relief, tax_year, sort_order')
-      .eq('tax_year', taxYear)
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true }),
+  const [taxCats, recRes] = await Promise.all([
+    fetchActiveTaxCategories(taxYear),
     supabase
       .from('receipts')
       .select('id, user_id, merchant_name, receipt_date, total_amount, category, tax_year, created_at')
@@ -185,10 +196,8 @@ export async function fetchLhdn(userId: string, taxYear = DEFAULT_TAX_YEAR): Pro
       .order('created_at', { ascending: false })
       .limit(100),
   ]);
-  if (catsRes.error) throw catsRes.error;
   if (recRes.error) throw recRes.error;
 
-  const taxCats = (catsRes.data ?? []) as TaxCategoryRow[];
   const receipts = (recRes.data ?? []) as ReceiptRow[];
 
   if (taxCats.length === 0) {

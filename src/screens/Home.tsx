@@ -9,7 +9,7 @@
  * <Link> to /rewards, /lhdn, /activity (those are still Placeholder routes
  * until later Phase 2 tasks port them).
  */
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { Avatar } from '@/components/Avatar';
 import { CatIcon } from '@/components/CatIcon';
@@ -44,6 +44,7 @@ function formatPoints(n: number): string {
 }
 
 export default function Home() {
+  const navigate = useNavigate();
   const { data = homeMock } = useHome();
   const {
     user,
@@ -77,7 +78,20 @@ export default function Home() {
         style={{ padding: '4px 20px 0' }}
       >
         <div className="flex items-center" style={{ gap: 10 }}>
-          <Avatar initials={user.initials} size={36} ring />
+          <button
+            type="button"
+            aria-label="Open settings"
+            onClick={() => navigate('/settings')}
+            style={{
+              background: 'transparent',
+              border: 0,
+              padding: 0,
+              cursor: 'pointer',
+              display: 'block',
+            }}
+          >
+            <Avatar initials={user.initials} size={36} ring />
+          </button>
           <div>
             <div
               className="font-medium text-muted"

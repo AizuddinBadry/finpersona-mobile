@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Home from './Home';
@@ -8,6 +9,13 @@ import Home from './Home';
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({ user: null }),
 }));
+
+const navigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const mod =
+    await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return { ...mod, useNavigate: () => navigate };
+});
 
 function renderHome() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -39,5 +47,15 @@ describe('Home', () => {
   it('renders at least one transaction row name', () => {
     renderHome();
     expect(screen.getByText('Mak Cik Nasi Lemak')).toBeInTheDocument();
+  });
+
+  it('navigates to /settings when the header avatar is tapped', async () => {
+    navigate.mockClear();
+    renderHome();
+
+    const button = screen.getByRole('button', { name: /Open settings/i });
+    await userEvent.click(button);
+
+    expect(navigate).toHaveBeenCalledWith('/settings');
   });
 });

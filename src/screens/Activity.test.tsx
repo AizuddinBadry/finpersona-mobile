@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -29,6 +29,10 @@ function renderActivity(initialEntry = '/activity') {
 }
 
 describe('Activity', () => {
+  beforeEach(() => {
+    navigate.mockClear();
+  });
+
   it('renders the Activity title', () => {
     renderActivity();
     expect(
@@ -71,7 +75,6 @@ describe('Activity', () => {
   });
 
   it('navigates to /receipts/:id when a receipt row is tapped', async () => {
-    navigate.mockClear();
     renderActivity();
 
     // First receipt row in the mock is "Mama's Kitchen" (id: 'a1').
@@ -110,8 +113,7 @@ describe('Activity', () => {
     // Title-cased: 'medical_health' → 'Medical health'.
     const chip = screen.getByRole('button', { name: /Clear filter/i });
     expect(chip).toBeInTheDocument();
-    expect(chip).toHaveTextContent('Filtered: Medical health');
-    expect(chip).toHaveTextContent('✕');
+    expect(chip).toHaveTextContent('Filtered: Medical health · ✕');
   });
 
   it('title-cases lifestyle_general → Lifestyle general in the chip', () => {

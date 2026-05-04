@@ -2,9 +2,10 @@
  * Activity — visual port of Finpersona-mobile-build/screens-2.jsx.
  *
  * Renders BETWEEN the StatusBar and BottomNav supplied by AppShell. Reached
- * from Home's "See all" link. Filter chips are interactive (active class
- * swaps on tap via aria-pressed) but don't actually filter the list — that's
- * deferred until backend wiring lands. Data lives in src/mocks/seed.ts.
+ * from Home's "See all" link. The in-component FILTERS chips remain visual
+ * only (active class swaps on tap via aria-pressed) pending backend wiring,
+ * but the ?category= URL param actually filters the rendered rows — set by
+ * Insights drill-ins. Data lives in src/mocks/seed.ts.
  */
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -42,8 +43,10 @@ function formatForeign(currency: 'SGD' | 'USD', amount: number): string {
  * 'other-claimable'   → 'Other claimable' (synthetic bucket)
  */
 function categoryLabel(code: string): string {
-  const spaced = code.replace(/_/g, ' ').replace(/-/g, ' ');
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  return code
+    .toLowerCase()
+    .replace(/[_-]/g, ' ')
+    .replace(/^./, (c) => c.toUpperCase());
 }
 
 export default function Activity() {
@@ -246,7 +249,7 @@ export default function Activity() {
             }}
           >
             <span>Filtered: {categoryLabel(categoryFilter)}</span>
-            <span aria-hidden style={{ opacity: 0.7 }}>·</span>
+            <span aria-hidden style={{ opacity: 0.7 }}>{' · '}</span>
             <span aria-hidden>✕</span>
           </button>
         </div>
@@ -256,6 +259,8 @@ export default function Activity() {
       <div style={{ padding: '16px 16px 0' }}>
         {categoryFilter && filteredTransactions.length === 0 && (
           <div
+            role="status"
+            aria-live="polite"
             className="bg-surface"
             style={{
               padding: '20px 16px',

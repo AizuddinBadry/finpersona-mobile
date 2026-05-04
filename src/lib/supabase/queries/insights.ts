@@ -11,8 +11,22 @@
  *   - forecast (AI output — not stored anywhere yet)
  */
 import { supabase } from '@/lib/supabase/client';
-import type { InsightsCategory, InsightsMock } from '@/mocks/seed';
+import type {
+  ClaimableCategory,
+  ClaimableIconName,
+  ClaimableInsights,
+  InsightsCategory,
+  InsightsMock,
+} from '@/mocks/seed';
 import { insightsMock } from '@/mocks/seed';
+import {
+  categoryToCode,
+  fetchActiveTaxCategories,
+} from '@/lib/supabase/queries/lhdn';
+
+// Re-export so callers can import these from the query module if they prefer
+// (matches how InsightsCategory / InsightsMock are co-located).
+export type { ClaimableCategory, ClaimableIconName, ClaimableInsights };
 
 export type InsightsReceiptRow = {
   id: string;
@@ -149,6 +163,123 @@ export function shapeInsights(args: {
     areaPrevious: insightsMock.areaPrevious,
     categories: categories.length > 0 ? categories : insightsMock.categories,
     forecast: insightsMock.forecast,
+  };
+}
+
+// ─── Claimable insights ──────────────────────────────────────────────────────
+//
+// Powers the new Claimable tab on /insights. Aggregates is_claimable receipts
+// in the current tax year against the active tax_categories caps so the donut
+// can render headroom + per-category utilization. Receipts that don't bucket
+// via categoryToCode (free-text → tax_categories.code) end up in a synthetic
+// "Other claimable" row so the totals stay honest.
+
+// Maps tax_categories.code → donut color + icon. Codes not present here fall
+// back to a neutral purple receipt — same shape as lhdn.ts's CATEGORY_VISUALS,
+// but a separate table because the Claimable donut wants a brighter palette
+// than the LHDN screen tiles.
+const CLAIMABLE_VISUALS: Record<string, { color: string; icon: ClaimableIconName }> = {
+  lifestyle: { color: '#D97636', icon: 'book' },
+  medical_health: { color: '#1F8B7E', icon: 'medical' },
+  sports: { color: '#3F7CC8', icon: 'pulse' },
+  internet: { color: '#5837C9', icon: 'flash' },
+  education: { color: '#7C3AED', icon: 'star' },
+};
+
+function visualFor(code: string): { color: string; icon: ClaimableIconName } {
+  return CLAIMABLE_VISUALS[code] ?? { color: '#6B5BFF', icon: 'receipt' };
+}
+
+type ClaimableReceiptRow = {
+  id: string;
+  total_amount: string | number;
+  category: string | null;
+  receipt_date: string;
+};
+
+export async function fetchClaimableInsights(
+  userId: string,
+  taxYear: number,
+): Promise<ClaimableInsights> {
+  const start = `${taxYear}-01-01`;
+  const end = `${taxYear}-12-31`;
+
+  const [categoryRows, recRes] = await Promise.all([
+    fetchActiveTaxCategories(taxYear),
+    supabase
+      .from('receipts')
+      .select('id, total_amount, category, receipt_date')
+      .eq('user_id', userId)
+      .eq('is_claimable', true)
+      .gte('receipt_date', start)
+      .lte('receipt_date', end),
+  ]);
+  if (recRes.error) throw recRes.error;
+
+  const receipts = (recRes.data ?? []) as ClaimableReceiptRow[];
+
+  // Bucket receipts by tax_categories.code; receipts that don't bucket fall
+  // into the synthetic Other claimable row so totals stay honest.
+  const validCodes = new Set(categoryRows.map((c) => c.code));
+  const claimedByCode = new Map<string, number>();
+  let otherClaimed = 0;
+  for (const r of receipts) {
+    const code = categoryToCode(r.category);
+    const amount = Number(r.total_amount);
+    if (code && validCodes.has(code)) {
+      claimedByCode.set(code, (claimedByCode.get(code) ?? 0) + amount);
+    } else {
+      otherClaimed += amount;
+    }
+  }
+
+  // Build cap-list-derived entries, then sort by pct desc.
+  const capEntries: ClaimableCategory[] = categoryRows.map((row) => {
+    const cap = Number(row.max_relief);
+    const claimed = claimedByCode.get(row.code) ?? 0;
+    const pct = cap > 0 ? Math.min(claimed / cap, 1) : 0;
+    const visual = visualFor(row.code);
+    return {
+      code: row.code,
+      name: row.name,
+      cap,
+      claimed,
+      pct,
+      color: visual.color,
+      icon: visual.icon,
+    };
+  });
+  capEntries.sort((a, b) => b.pct - a.pct);
+
+  // Append the Other claimable trailer ONLY if it has spend — and always
+  // last, never sorted into the middle (the donut depends on this).
+  const categories: ClaimableCategory[] = [...capEntries];
+  if (otherClaimed > 0) {
+    categories.push({
+      code: 'other-claimable',
+      name: 'Other claimable',
+      cap: 0,
+      claimed: otherClaimed,
+      pct: 0,
+      color: '#A0A0B6',
+      icon: 'receipt',
+    });
+  }
+
+  // totalCap excludes Other (cap 0 anyway); totalClaimed includes everything.
+  const totalCap = capEntries.reduce((s, c) => s + c.cap, 0);
+  const totalClaimed = categories.reduce((s, c) => s + c.claimed, 0);
+  const headroom = Math.max(totalCap - totalClaimed, 0);
+  // categoryCount: only entries with headroom > 0 — fully-utilized rows
+  // and the cap-0 Other trailer don't count toward "still claimable" UI.
+  const categoryCount = categories.filter((c) => c.cap - c.claimed > 0).length;
+
+  return {
+    totalCap,
+    totalClaimed,
+    headroom,
+    categoryCount,
+    categories,
   };
 }
 

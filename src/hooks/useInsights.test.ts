@@ -1,9 +1,29 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import React, { type ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   monthRange,
   shapeInsights,
   type InsightsReceiptRow,
+  type ClaimableInsights,
 } from '@/lib/supabase/queries/insights';
+import { claimableInsightsMock } from '@/mocks/seed';
+
+vi.mock('@/hooks/useAuth', () => ({
+  useAuth: vi.fn(),
+}));
+
+import { useAuth } from '@/hooks/useAuth';
+import { useClaimableInsights } from './useInsights';
+
+const mockedUseAuth = vi.mocked(useAuth);
+
+function makeWrapper() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return ({ children }: { children: ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: qc }, children);
+}
 
 function r(id: string, amount: string | number, category: string | null): InsightsReceiptRow {
   return {
@@ -127,5 +147,87 @@ describe('shapeInsights', () => {
     });
     expect(out.monthLabel).toBe('April');
     expect(out.prevLabel).toBe('March');
+  });
+});
+
+describe('useClaimableInsights', () => {
+  beforeEach(() => {
+    mockedUseAuth.mockReset();
+    mockedUseAuth.mockReturnValue({
+      session: null,
+      user: { id: 'user-1' } as never,
+      isLoading: false,
+      isAuthenticated: true,
+      signOut: vi.fn(),
+    });
+  });
+
+  const fixture: ClaimableInsights = {
+    totalCap: 100,
+    totalClaimed: 25,
+    headroom: 75,
+    categoryCount: 1,
+    categories: [
+      {
+        code: 'lifestyle',
+        name: 'Lifestyle',
+        cap: 100,
+        claimed: 25,
+        pct: 0.25,
+        color: '#6E4CE6',
+        icon: 'book',
+      },
+    ],
+  };
+
+  it('returns the fetched data on success', async () => {
+    const fetchClaimableInsights = vi.fn().mockResolvedValue(fixture);
+
+    const { result } = renderHook(
+      () => useClaimableInsights({ fetchClaimableInsights }),
+      { wrapper: makeWrapper() },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual(fixture);
+    expect(fetchClaimableInsights).toHaveBeenCalledWith(
+      'user-1',
+      expect.any(Number),
+    );
+  });
+
+  it('falls back to claimableInsightsMock when the query rejects', async () => {
+    const fetchClaimableInsights = vi
+      .fn()
+      .mockRejectedValue(new Error('boom'));
+
+    const { result } = renderHook(
+      () => useClaimableInsights({ fetchClaimableInsights }),
+      { wrapper: makeWrapper() },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBe(claimableInsightsMock);
+  });
+
+  it('is disabled (queryFn not called) when no user is authenticated', async () => {
+    mockedUseAuth.mockReturnValue({
+      session: null,
+      user: null,
+      isLoading: false,
+      isAuthenticated: false,
+      signOut: vi.fn(),
+    });
+    const fetchClaimableInsights = vi.fn().mockResolvedValue(fixture);
+
+    const { result } = renderHook(
+      () => useClaimableInsights({ fetchClaimableInsights }),
+      { wrapper: makeWrapper() },
+    );
+
+    // Give react-query a tick. Disabled queries stay in 'pending' fetchStatus 'idle'.
+    await new Promise((r) => setTimeout(r, 10));
+    expect(fetchClaimableInsights).not.toHaveBeenCalled();
+    expect(result.current.fetchStatus).toBe('idle');
   });
 });

@@ -707,6 +707,49 @@ export const insightsMock: InsightsMock = {
   },
 };
 
+/**
+ * Claimable insights mock — backs the Claimable tab on /insights via
+ * useClaimableInsights. Aggregates is_claimable receipts in the current
+ * tax year against active tax_categories caps. Numbers below are
+ * internally consistent: totalCap = sum(cap), totalClaimed = sum(claimed),
+ * headroom = totalCap - totalClaimed, categoryCount counts categories with
+ * cap - claimed > 0.
+ */
+// Use the LHDN-leaning relief icon palette plus 'receipt' for the synthetic
+// Other-claimable trailer (CatIconName doesn't carry pulse/flash/star).
+export type ClaimableIconName = LhdnIconName | 'receipt';
+
+export type ClaimableCategory = {
+  code: string;
+  name: string;
+  cap: number;            // max_relief, or 0 for synthetic Other claimable
+  claimed: number;
+  pct: number;            // claimed / cap clamped to [0, 1]; 0 if cap is 0
+  color: string;
+  icon: ClaimableIconName;
+};
+
+export type ClaimableInsights = {
+  totalCap: number;
+  totalClaimed: number;
+  headroom: number;       // max(totalCap - totalClaimed, 0)
+  categoryCount: number;  // count of categories with headroom > 0
+  categories: ClaimableCategory[];
+};
+
+export const claimableInsightsMock: ClaimableInsights = {
+  totalCap: 13400,
+  totalClaimed: 4680,
+  headroom: 8720,
+  categoryCount: 3,
+  categories: [
+    { code: 'internet', name: 'Internet subscription', cap: 2400, claimed: 2400, pct: 1.0, color: '#5837C9', icon: 'flash' },
+    { code: 'lifestyle', name: 'Lifestyle', cap: 2500, claimed: 1800, pct: 0.72, color: '#D97636', icon: 'book' },
+    { code: 'medical_health', name: 'Medical', cap: 8000, claimed: 480, pct: 0.06, color: '#1F8B7E', icon: 'medical' },
+    { code: 'sports', name: 'Sports equipment', cap: 500, claimed: 0, pct: 0.0, color: '#3F7CC8', icon: 'pulse' },
+  ],
+};
+
 export type RewardItem = {
   id: string;
   name: string;

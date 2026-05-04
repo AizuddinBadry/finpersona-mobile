@@ -35,11 +35,11 @@ export default function Cards() {
             className="text-ink"
             style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.5 }}
           >
-            Accounts
+            Sources
           </h1>
           <button
             type="button"
-            aria-label="Add account"
+            aria-label="Add source"
             className="flex items-center justify-center bg-surface shadow-card"
             style={{
               width: 36,
@@ -55,7 +55,7 @@ export default function Cards() {
           className="font-medium text-muted"
           style={{ fontSize: 13, marginTop: 4 }}
         >
-          {cards.length} cards · 3 currencies linked
+          {cards.length} {cards.length === 1 ? 'source' : 'sources'} linked
         </div>
       </div>
 

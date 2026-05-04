@@ -39,10 +39,10 @@ function renderWithRedirect(initialPath: string) {
 }
 
 describe('Cards', () => {
-  it('renders the Accounts heading', () => {
+  it('renders the Sources heading', () => {
     renderCards();
     expect(
-      screen.getByRole('heading', { name: 'Accounts' }),
+      screen.getByRole('heading', { name: 'Sources' }),
     ).toBeInTheDocument();
   });
 
@@ -72,9 +72,9 @@ describe('Cards', () => {
   it('redirects /cards to /sources for backward compat', () => {
     renderWithRedirect('/cards');
     // If the redirect works, Cards is mounted at /sources and shows
-    // its existing "Accounts" heading (Task 3 will rename this).
+    // its Sources heading.
     expect(
-      screen.getByRole('heading', { name: 'Accounts' }),
+      screen.getByRole('heading', { name: 'Sources' }),
     ).toBeInTheDocument();
   });
 });

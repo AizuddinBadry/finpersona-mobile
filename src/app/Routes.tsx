@@ -12,6 +12,7 @@ import Advisor from '@/screens/Advisor';
 import Insights from '@/screens/Insights';
 import Rewards from '@/screens/Rewards';
 import ReceiptDetail from '@/screens/ReceiptDetail';
+import Settings from '@/screens/Settings';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SignupScreen from '@/features/auth/SignupScreen';
 import OnboardingScreen from '@/features/auth/OnboardingScreen';
@@ -120,6 +121,14 @@ export default function AppRoutes() {
           element={
             <Tab>
               <ReceiptDetail />
+            </Tab>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <Tab>
+              <Settings />
             </Tab>
           }
         />

@@ -75,6 +75,15 @@ vi.mock('@/hooks/useReceipt', () => ({
 import { useReceipt } from '@/hooks/useReceipt';
 const mockedUseReceipt = vi.mocked(useReceipt);
 
+// Mock Lightbox so the test doesn't need a real portal / Capacitor plugin.
+vi.mock('@/components/Lightbox', () => ({
+  Lightbox: ({ src, onClose }: { src: string; onClose: () => void }) => (
+    <div role="dialog" aria-label="lightbox" data-src={src}>
+      <button onClick={onClose}>close-lightbox</button>
+    </div>
+  ),
+}));
+
 type ReceiptQueryResult = UseQueryResult<ReceiptRow, Error>;
 
 function loadingResult(): ReceiptQueryResult {
@@ -414,6 +423,42 @@ describe('ReceiptDetail', () => {
     expect(
       screen.getByRole('button', { name: /^Dismiss$/i }),
     ).toBeInTheDocument();
+  });
+
+  // ── Task 8: image lightbox ───────────────────────────────────────────────
+
+  it('clicking the thumbnail opens the Lightbox with the receipt image_url', async () => {
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    const user = userEvent.setup();
+    renderScreen();
+
+    const thumbBtn = screen.getByRole('button', {
+      name: /Open receipt image/i,
+    });
+    await user.click(thumbBtn);
+
+    const dialog = screen.getByRole('dialog', { name: 'lightbox' });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveAttribute('data-src', sampleRow.image_url);
+  });
+
+  it('clicking the Lightbox close button dismisses it', async () => {
+    mockedUseReceipt.mockReturnValue(successResult(sampleRow));
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(
+      screen.getByRole('button', { name: /Open receipt image/i }),
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'lightbox' }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /close-lightbox/i }));
+
+    expect(
+      screen.queryByRole('dialog', { name: 'lightbox' }),
+    ).not.toBeInTheDocument();
   });
 
   it('does not throw or warn when unmounted before the 3000ms timer expires', async () => {

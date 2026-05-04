@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Field } from '@/components/Field';
 import { Icon } from '@/components/Icon';
+import { Lightbox } from '@/components/Lightbox';
 import {
   useDeleteReceipt,
   useReceipt,
@@ -227,6 +228,7 @@ function LoadedState({
   const [saveError, setSaveError] = useState<Error | null>(null);
   const [deleteConfirmPending, setDeleteConfirmPending] = useState(false);
   const [deleteError, setDeleteError] = useState<Error | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -260,6 +262,13 @@ function LoadedState({
       setSavedToastVisible(false);
     }
   }, [phase, savedToastVisible]);
+
+  // Lightbox can only be opened in view phase; close it if phase changes.
+  useEffect(() => {
+    if (phase !== 'view' && lightboxOpen) {
+      setLightboxOpen(false);
+    }
+  }, [phase, lightboxOpen]);
 
   const editing = phase === 'edit' || phase === 'saving' || phase === 'error';
   const saving = phase === 'saving' || update.isPending;
@@ -523,20 +532,49 @@ function LoadedState({
             overflow: 'hidden',
           }}
         >
-          {/* Image (always read-only) */}
-          {data.image_url && (
-            <img
-              src={data.image_url}
-              alt={data.merchant_name}
-              style={{
-                display: 'block',
-                width: '100%',
-                maxHeight: 280,
-                objectFit: 'cover',
-                background: '#F5F2FE',
-              }}
-            />
-          )}
+          {/* Image (always read-only). In view phase we wrap it in a button
+              so tapping opens the fullscreen Lightbox; in edit/saving/error
+              the thumbnail stays static. */}
+          {data.image_url &&
+            (phase === 'view' ? (
+              <button
+                type="button"
+                onClick={() => setLightboxOpen(true)}
+                aria-label="Open receipt image"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: 0,
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                }}
+              >
+                <img
+                  src={data.image_url}
+                  alt={data.merchant_name}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    maxHeight: 280,
+                    objectFit: 'cover',
+                    background: '#F5F2FE',
+                  }}
+                />
+              </button>
+            ) : (
+              <img
+                src={data.image_url}
+                alt={data.merchant_name}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  maxHeight: 280,
+                  objectFit: 'cover',
+                  background: '#F5F2FE',
+                }}
+              />
+            ))}
 
           {editing && editForm ? (
             <EditBody
@@ -593,6 +631,14 @@ function LoadedState({
           )}
         </div>
       </div>
+
+      {lightboxOpen && data.image_url && (
+        <Lightbox
+          src={data.image_url}
+          alt={data.merchant_name}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -24,6 +24,12 @@ export type ReceiptDraft = {
   imageUrl: string | null;
   imageFileId: string | null;
   extracted: ExtractedReceiptData;
+  /**
+   * payment_sources.id chosen on the review step. Required — the DB trigger
+   * on receipts uses this to decrement the source's running balance, so we
+   * never insert a scan-flow receipt without one.
+   */
+  sourceId: string;
 };
 
 export type ReceiptInsertRow = {
@@ -39,6 +45,7 @@ export type ReceiptInsertRow = {
   is_verified: boolean;
   is_claimable: boolean;
   tax_year: number;
+  source_id: string;
 };
 
 /**
@@ -64,6 +71,7 @@ export function toReceiptInsert(draft: ReceiptDraft): ReceiptInsertRow {
     is_verified: true, // user just reviewed it on the confirm screen
     is_claimable: draft.isClaimable,
     tax_year: taxYear,
+    source_id: draft.sourceId,
   };
 }
 

@@ -13,10 +13,13 @@
  *   - done:                  success banner with View receipt + Back to home
  *   - error:                 error banner + Retry / Cancel
  */
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Field } from '@/components/Field';
 import { Icon } from '@/components/Icon';
 import { useCaptureFlow, type CapturePhase } from '@/hooks/useCaptureFlow';
+import { usePaymentSources } from '@/hooks/usePaymentSources';
+import type { PaymentSource } from '@/lib/supabase/queries/sources';
 
 const GRAD_BACKDROP =
   'radial-gradient(120% 80% at 50% -10%, #2A1854 0%, #0A0418 60%)';
@@ -37,7 +40,19 @@ const PHASE_LABEL: Record<CapturePhase, string> = {
 
 export default function Capture() {
   const navigate = useNavigate();
-  const flow = useCaptureFlow();
+  const sourcesQuery = usePaymentSources();
+
+  // Pin the user's `is_default = true` source as the seed for the review
+  // step's Source dropdown. Mirrors CaptureManual's resolution.
+  const defaultSourceId = useMemo(() => {
+    if (!sourcesQuery.data?.length) return '';
+    return (
+      sourcesQuery.data.find((s) => s.is_default)?.id ??
+      sourcesQuery.data[0]!.id
+    );
+  }, [sourcesQuery.data]);
+
+  const flow = useCaptureFlow({ defaultSourceId });
 
   return (
     <div
@@ -154,6 +169,8 @@ export default function Capture() {
           <ReviewBody
             form={flow.form}
             saving={flow.phase === 'saving'}
+            sources={sourcesQuery.data ?? []}
+            sourcesLoading={sourcesQuery.isLoading}
             onChange={flow.setForm}
             onCancel={flow.reset}
             onSave={flow.confirm}
@@ -255,12 +272,19 @@ function ProgressBody({ label }: { label: string }) {
 function ReviewBody(props: {
   form: ReturnType<typeof useCaptureFlow>['form'];
   saving: boolean;
+  sources: PaymentSource[];
+  sourcesLoading: boolean;
   onChange: ReturnType<typeof useCaptureFlow>['setForm'];
   onCancel: () => void;
   onSave: () => void;
 }) {
-  const { form, saving, onChange, onCancel, onSave } = props;
+  const { form, saving, sources, sourcesLoading, onChange, onCancel, onSave } =
+    props;
   if (!form) return null;
+
+  // Save is gated on having a payment source picked — the receipts row
+  // requires a non-null source_id so the DB trigger can decrement balance.
+  const saveDisabled = saving || !form.sourceId;
 
   return (
     <div>
@@ -312,6 +336,54 @@ function ReviewBody(props: {
           value={form.category ?? ''}
           onChange={(v) => onChange((p) => ({ ...p, category: v || null }))}
         />
+        <label
+          style={{
+            padding: '10px 14px',
+            borderRadius: 12,
+            background: '#F5F2FE',
+            border: '0.5px solid rgba(91,71,168,0.10)',
+            display: 'block',
+          }}
+        >
+          <div
+            className="text-muted font-semibold"
+            style={{
+              fontSize: 10,
+              letterSpacing: 0.3,
+              textTransform: 'uppercase',
+            }}
+          >
+            Source
+          </div>
+          <select
+            value={form.sourceId}
+            onChange={(e) => {
+              const v = e.target.value;
+              onChange((p) => ({ ...p, sourceId: v }));
+            }}
+            disabled={sourcesLoading || sources.length === 0}
+            className="font-semibold text-ink"
+            style={{
+              fontSize: 14,
+              marginTop: 4,
+              letterSpacing: -0.2,
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+            }}
+          >
+            {sourcesLoading && <option value="">Loading…</option>}
+            {!sourcesLoading && sources.length === 0 && (
+              <option value="">No sources available</option>
+            )}
+            {sources.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {/* LHDN toggle */}
@@ -405,7 +477,7 @@ function ReviewBody(props: {
         <button
           type="button"
           onClick={onSave}
-          disabled={saving}
+          disabled={saveDisabled}
           className="font-bold text-white shadow-purpleGlow"
           style={{
             flex: 1.4,
@@ -415,7 +487,7 @@ function ReviewBody(props: {
             fontSize: 14,
             border: 'none',
             letterSpacing: -0.1,
-            opacity: saving ? 0.7 : 1,
+            opacity: saveDisabled ? 0.5 : 1,
           }}
         >
           {saving ? 'Saving…' : 'Save expense'}

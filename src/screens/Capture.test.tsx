@@ -7,6 +7,7 @@ import type {
   CapturePhase,
   ReviewForm,
 } from '@/hooks/useCaptureFlow';
+import type { PaymentSource } from '@/lib/supabase/queries/sources';
 
 // Spy on useNavigate so we can assert what the screen does on done-phase
 // button clicks. Mirrors the pattern used in ReceiptDetail/Activity tests.
@@ -28,8 +29,35 @@ vi.mock('@/hooks/useCaptureFlow', async (importOriginal) => {
   };
 });
 
+// usePaymentSources — supply a couple of sources so we can verify default-pick
+// and the dropdown contents in the review step.
+vi.mock('@/hooks/usePaymentSources', () => ({ usePaymentSources: vi.fn() }));
+
 import { useCaptureFlow } from '@/hooks/useCaptureFlow';
+import { usePaymentSources } from '@/hooks/usePaymentSources';
 const mockedUseCaptureFlow = vi.mocked(useCaptureFlow);
+const mockedUsePaymentSources = vi.mocked(usePaymentSources);
+
+const sources: PaymentSource[] = [
+  {
+    id: 'src-default',
+    name: 'Maybank Debit',
+    last4: '••••',
+    balance: 1000,
+    currency: 'MYR',
+    source_type: 'debit_card',
+    is_default: true,
+  },
+  {
+    id: 'src-other',
+    name: 'CIMB Cash',
+    last4: '••••',
+    balance: 500,
+    currency: 'MYR',
+    source_type: 'cash',
+    is_default: false,
+  },
+];
 
 const sampleForm: ReviewForm = {
   merchantName: 'Kinokuniya KLCC',
@@ -38,6 +66,7 @@ const sampleForm: ReviewForm = {
   currency: 'MYR',
   category: 'lifestyle',
   isClaimable: true,
+  sourceId: 'src-default',
 };
 
 function makeFlow(overrides: Partial<ReturnType<typeof useCaptureFlow>> = {}) {
@@ -66,7 +95,13 @@ function renderCapture() {
 
 beforeEach(() => {
   mockedUseCaptureFlow.mockReset();
+  mockedUsePaymentSources.mockReset();
   navigate.mockReset();
+  mockedUsePaymentSources.mockReturnValue({
+    data: sources,
+    isLoading: false,
+    isError: false,
+  } as ReturnType<typeof usePaymentSources>);
 });
 
 describe('Capture', () => {
@@ -148,6 +183,70 @@ describe('Capture', () => {
     renderCapture();
     await userEvent.click(screen.getByRole('button', { name: 'Save expense' }));
     expect(confirm).toHaveBeenCalledOnce();
+  });
+
+  it('review: renders a payment source dropdown with the user sources', () => {
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'review', form: sampleForm }),
+    );
+    renderCapture();
+    const select = screen.getByLabelText(/source/i) as HTMLSelectElement;
+    expect(select).toBeInTheDocument();
+    const options = Array.from(select.querySelectorAll('option')).map(
+      (o) => o.textContent,
+    );
+    expect(options).toEqual(
+      expect.arrayContaining(['Maybank Debit', 'CIMB Cash']),
+    );
+  });
+
+  it('review: source dropdown reflects the form.sourceId value', () => {
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'review', form: sampleForm }),
+    );
+    renderCapture();
+    const select = screen.getByLabelText(/source/i) as HTMLSelectElement;
+    expect(select.value).toBe('src-default');
+  });
+
+  it('review: passes the user\'s default source into useCaptureFlow', () => {
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'review', form: sampleForm }),
+    );
+    renderCapture();
+    expect(mockedUseCaptureFlow).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultSourceId: 'src-default' }),
+    );
+  });
+
+  it('review: changing the source dropdown calls setForm with the new sourceId', async () => {
+    const setForm = vi.fn();
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({ phase: 'review', form: sampleForm, setForm }),
+    );
+    renderCapture();
+    await userEvent.selectOptions(
+      screen.getByLabelText(/source/i),
+      'src-other',
+    );
+    expect(setForm).toHaveBeenCalled();
+    const lastCall = setForm.mock.calls[setForm.mock.calls.length - 1]!;
+    const updater = lastCall[0] as (f: ReviewForm) => ReviewForm;
+    expect(updater(sampleForm).sourceId).toBe('src-other');
+  });
+
+  it('review: Save is disabled when sourceId is empty', () => {
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({
+        phase: 'review',
+        form: { ...sampleForm, sourceId: '' },
+      }),
+    );
+    renderCapture();
+    const saveBtn = screen.getByRole('button', {
+      name: 'Save expense',
+    }) as HTMLButtonElement;
+    expect(saveBtn.disabled).toBe(true);
   });
 
   it('review: Cancel triggers flow.reset()', async () => {

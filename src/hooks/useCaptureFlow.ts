@@ -46,6 +46,12 @@ export type ReviewForm = {
   currency: string;
   category: string | null;
   isClaimable: boolean;
+  /**
+   * payment_sources.id picked on the review step. The screen seeds this from
+   * the user's `is_default` source via the `defaultSourceId` dep, but the user
+   * can override it before saving.
+   */
+  sourceId: string;
 };
 
 export type CaptureFlowDeps = {
@@ -53,6 +59,13 @@ export type CaptureFlowDeps = {
   uploadReceipt?: typeof defaultUpload;
   extractReceipt?: typeof defaultExtract;
   insertReceipt?: typeof defaultInsert;
+  /**
+   * The user's default payment_sources.id, fetched by the screen via
+   * usePaymentSources(). Pre-populates `form.sourceId` when the flow
+   * transitions to `review`. Empty string (or undefined) means "no default
+   * available yet" — the user must pick before they can save.
+   */
+  defaultSourceId?: string;
 };
 
 export type CaptureFlowState = {
@@ -77,8 +90,15 @@ const INITIAL_STATE: CaptureFlowState = {
   insertedId: null,
 };
 
-/** Initial form values pre-filled from Claude's extraction. */
-export function formFromExtraction(e: ExtractedReceiptData): ReviewForm {
+/**
+ * Initial form values pre-filled from Claude's extraction. `sourceId` cannot
+ * come from the OCR blob — the screen passes the user's default
+ * payment_sources.id in (see `useCaptureFlow`'s `defaultSourceId` dep).
+ */
+export function formFromExtraction(
+  e: ExtractedReceiptData,
+  defaultSourceId = '',
+): ReviewForm {
   return {
     merchantName: e.merchant,
     receiptDate: e.date,
@@ -86,6 +106,7 @@ export function formFromExtraction(e: ExtractedReceiptData): ReviewForm {
     currency: e.currency || 'MYR',
     category: e.suggested_category || null,
     isClaimable: e.is_eligible,
+    sourceId: defaultSourceId,
   };
 }
 
@@ -95,6 +116,7 @@ export function useCaptureFlow(deps: CaptureFlowDeps = {}) {
     uploadReceipt = defaultUpload,
     extractReceipt = defaultExtract,
     insertReceipt = defaultInsert,
+    defaultSourceId = '',
   } = deps;
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -133,7 +155,7 @@ export function useCaptureFlow(deps: CaptureFlowDeps = {}) {
         ...s,
         phase: 'review',
         extracted,
-        form: formFromExtraction(extracted),
+        form: formFromExtraction(extracted, defaultSourceId),
       }));
     } catch (err) {
       setState((s) => ({
@@ -142,7 +164,7 @@ export function useCaptureFlow(deps: CaptureFlowDeps = {}) {
         errorMessage: err instanceof Error ? err.message : 'Capture failed',
       }));
     }
-  }, [capturePhoto, uploadReceipt, extractReceipt, user?.id]);
+  }, [capturePhoto, uploadReceipt, extractReceipt, user?.id, defaultSourceId]);
 
   const confirm = useCallback(async () => {
     if (!user?.id || !state.extracted || !state.form) return;
@@ -159,6 +181,7 @@ export function useCaptureFlow(deps: CaptureFlowDeps = {}) {
         imageUrl: state.upload?.url ?? null,
         imageFileId: state.upload?.fileId ?? null,
         extracted: state.extracted,
+        sourceId: state.form.sourceId,
       };
       const { id } = await insertReceipt(draft);
       // The new row affects every screen that aggregates from receipts.

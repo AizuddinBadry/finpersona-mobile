@@ -56,7 +56,13 @@ describe('formFromExtraction', () => {
       currency: 'MYR',
       category: 'lifestyle',
       isClaimable: true,
+      sourceId: '',
     });
+  });
+
+  it('seeds sourceId from a passed-in default', () => {
+    const f = formFromExtraction(sampleExtracted, 'src-default');
+    expect(f.sourceId).toBe('src-default');
   });
 
   it('falls back to null category when extraction has no suggestion', () => {
@@ -100,6 +106,7 @@ describe('useCaptureFlow', () => {
       currency: 'MYR',
       category: 'lifestyle',
       isClaimable: true,
+      sourceId: '',
     });
     // The base64 from capture flows into both upload + extract.
     expect(uploadReceipt).toHaveBeenCalledWith(
@@ -158,6 +165,27 @@ describe('useCaptureFlow', () => {
     expect(result.current.errorMessage).toBe('Claude rate limited');
   });
 
+  it('seeds form.sourceId from the passed-in defaultSourceId after extraction', async () => {
+    const { wrapper } = makeWrapper();
+    const capturePhoto = vi.fn().mockResolvedValue({ base64: 'AAA', mediaType: 'image/jpeg' });
+    const uploadReceipt = vi.fn().mockResolvedValue({ url: 'u', fileId: 'f', fileName: 'n' });
+    const extractReceipt = vi.fn().mockResolvedValue(sampleExtracted);
+    const { result } = renderHook(
+      () =>
+        useCaptureFlow({
+          capturePhoto,
+          uploadReceipt,
+          extractReceipt,
+          defaultSourceId: 'src-default',
+        }),
+      { wrapper },
+    );
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(result.current.form?.sourceId).toBe('src-default');
+  });
+
   it('confirm() inserts the receipt and transitions to done', async () => {
     const { wrapper, qc } = makeWrapper();
     const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
@@ -167,7 +195,14 @@ describe('useCaptureFlow', () => {
     const insertReceipt = vi.fn().mockResolvedValue({ id: 'new-id' });
 
     const { result } = renderHook(
-      () => useCaptureFlow({ capturePhoto, uploadReceipt, extractReceipt, insertReceipt }),
+      () =>
+        useCaptureFlow({
+          capturePhoto,
+          uploadReceipt,
+          extractReceipt,
+          insertReceipt,
+          defaultSourceId: 'src-default',
+        }),
       { wrapper },
     );
 
@@ -189,6 +224,7 @@ describe('useCaptureFlow', () => {
         imageUrl: 'https://b2/x',
         imageFileId: 'f1',
         extracted: sampleExtracted,
+        sourceId: 'src-default',
       }),
     );
     // Receipt insert should bust the dependent query keys.

@@ -192,7 +192,9 @@ describe('CaptureManual', () => {
         merchantName: 'Tesco Mutiara',
         receiptDate: '2026-04-15',
         totalAmount: 89.5,
-        category: 'groceries',
+        // PURCHASE_TYPES value flows in as `purchaseType`; the helper maps it
+        // onto the row's subcategory column.
+        purchaseType: 'groceries',
         sourceId: 'src-default',
       });
     });

@@ -77,7 +77,10 @@ export default function CaptureManual() {
         merchantName: merchant.trim(),
         receiptDate: date,
         totalAmount,
-        category,
+        // Local `category` state holds a PURCHASE_TYPES value (e.g.
+        // "groceries"); the helper writes it to row.subcategory and sets
+        // row.category = 'uncategorized' to match the web app's manual flow.
+        purchaseType: category,
         sourceId: effectiveSourceId,
       });
       return res;

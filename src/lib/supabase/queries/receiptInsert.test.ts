@@ -148,7 +148,7 @@ describe('insertManualReceipt', () => {
     merchantName: 'Tesco Mutiara',
     receiptDate: '2026-04-15',
     totalAmount: 89.5,
-    category: 'groceries',
+    purchaseType: 'groceries',
     sourceId: 'src-default',
   };
 
@@ -164,9 +164,14 @@ describe('insertManualReceipt', () => {
         receipt_date: '2026-04-15',
         total_amount: 89.5,
         currency: 'MYR',
-        category: 'groceries',
+        // Manual entries always go in as 'uncategorized' tax_category — the
+        // user's PURCHASE_TYPES pick is preserved as free-text on subcategory.
+        // Mirrors finpersona/components/receipt/receipt-upload-modal.tsx.
+        category: 'uncategorized',
+        subcategory: 'groceries',
         is_claimable: false,
         is_manual_entry: true,
+        points_eligible: false,
         source_id: 'src-default',
         tax_year: 2026,
       }),

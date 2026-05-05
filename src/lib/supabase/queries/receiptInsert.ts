@@ -80,21 +80,29 @@ export async function insertReceipt(draft: ReceiptDraft): Promise<{ id: string }
 }
 
 /**
- * Manual-entry args. Mirrors the web app's manual receipt modal: no extracted
- * blob, no image, just the user-typed merchant/date/total/category plus the
- * payment source they tapped. Sets `is_manual_entry = true` and
- * `is_claimable = false` (manual rows can be flipped to claimable later from
- * the receipt detail screen).
+ * Manual-entry args. Mirrors the web app's manual receipt modal
+ * (finpersona/components/receipt/receipt-upload-modal.tsx): no extracted
+ * blob, no image, just the user-typed merchant/date/total plus a
+ * PURCHASE_TYPES pick and the payment source they tapped.
  *
- * Task 6 introduces a minimal version; Task 7 will refine the row shape if
- * the schema requires more columns (e.g. subcategory).
+ * Defaults set on the row:
+ *   - `is_manual_entry: true` — distinguishes from scan flow
+ *   - `is_claimable: false` — manual rows aren't auto-claimed; user can flip
+ *     this from the receipt detail screen later
+ *   - `points_eligible: false` — manual entries don't award points (mirrors
+ *     migration 016_non_claimable_receipt_points.sql)
+ *
+ * Note: `purchaseType` is the user's PURCHASE_TYPES value (e.g. "groceries").
+ * It is written to the row's `subcategory` column as free text. The row's
+ * `category` column (a tax_category code) is hardcoded to "uncategorized" —
+ * the auto-categoriser / tax-relief flow runs later, off the manual queue.
  */
 export type ManualReceiptArgs = {
   userId: string;
   merchantName: string;
   receiptDate: string; // YYYY-MM-DD
   totalAmount: number;
-  category: string;
+  purchaseType: string; // PURCHASE_TYPES value, lands on row.subcategory
   sourceId: string;
 };
 
@@ -104,9 +112,11 @@ export type ManualReceiptInsertRow = {
   receipt_date: string;
   total_amount: number;
   currency: string;
-  category: string;
+  category: string; // always 'uncategorized' for manual entries
+  subcategory: string; // PURCHASE_TYPES value
   is_claimable: boolean;
   is_manual_entry: boolean;
+  points_eligible: boolean;
   source_id: string;
   tax_year: number;
 };
@@ -122,9 +132,11 @@ function toManualReceiptInsert(args: ManualReceiptArgs): ManualReceiptInsertRow 
     receipt_date: args.receiptDate,
     total_amount: args.totalAmount,
     currency: 'MYR',
-    category: args.category,
+    category: 'uncategorized',
+    subcategory: args.purchaseType,
     is_claimable: false,
     is_manual_entry: true,
+    points_eligible: false,
     source_id: args.sourceId,
     tax_year: taxYear,
   };

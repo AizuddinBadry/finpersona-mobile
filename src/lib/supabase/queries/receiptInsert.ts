@@ -78,3 +78,68 @@ export async function insertReceipt(draft: ReceiptDraft): Promise<{ id: string }
   if (!data) throw new Error('Insert returned no row');
   return { id: data.id as string };
 }
+
+/**
+ * Manual-entry args. Mirrors the web app's manual receipt modal: no extracted
+ * blob, no image, just the user-typed merchant/date/total/category plus the
+ * payment source they tapped. Sets `is_manual_entry = true` and
+ * `is_claimable = false` (manual rows can be flipped to claimable later from
+ * the receipt detail screen).
+ *
+ * Task 6 introduces a minimal version; Task 7 will refine the row shape if
+ * the schema requires more columns (e.g. subcategory).
+ */
+export type ManualReceiptArgs = {
+  userId: string;
+  merchantName: string;
+  receiptDate: string; // YYYY-MM-DD
+  totalAmount: number;
+  category: string;
+  sourceId: string;
+};
+
+export type ManualReceiptInsertRow = {
+  user_id: string;
+  merchant_name: string;
+  receipt_date: string;
+  total_amount: number;
+  currency: string;
+  category: string;
+  is_claimable: boolean;
+  is_manual_entry: boolean;
+  source_id: string;
+  tax_year: number;
+};
+
+function toManualReceiptInsert(args: ManualReceiptArgs): ManualReceiptInsertRow {
+  const taxYear = parseInt(args.receiptDate.slice(0, 4), 10);
+  if (Number.isNaN(taxYear)) {
+    throw new Error(`Invalid receipt_date '${args.receiptDate}' — must be YYYY-MM-DD`);
+  }
+  return {
+    user_id: args.userId,
+    merchant_name: args.merchantName,
+    receipt_date: args.receiptDate,
+    total_amount: args.totalAmount,
+    currency: 'MYR',
+    category: args.category,
+    is_claimable: false,
+    is_manual_entry: true,
+    source_id: args.sourceId,
+    tax_year: taxYear,
+  };
+}
+
+export async function insertManualReceipt(
+  args: ManualReceiptArgs,
+): Promise<{ id: string }> {
+  const row = toManualReceiptInsert(args);
+  const { data, error } = await supabase
+    .from('receipts')
+    .insert(row)
+    .select('id')
+    .single();
+  if (error) throw error;
+  if (!data) throw new Error('Insert returned no row');
+  return { id: data.id as string };
+}

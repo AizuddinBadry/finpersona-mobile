@@ -12,7 +12,11 @@ vi.mock('@/lib/supabase/client', () => ({
   supabase: { from: (...args: unknown[]) => fromMock(...args) },
 }));
 
-import { toReceiptInsert, insertReceipt } from './receiptInsert';
+import {
+  toReceiptInsert,
+  insertReceipt,
+  insertManualReceipt,
+} from './receiptInsert';
 
 const baseExtracted: ExtractedReceiptData = {
   merchant: 'Kinokuniya',
@@ -128,5 +132,67 @@ describe('insertReceipt', () => {
   it('throws when the insert returns no row data', async () => {
     singleMock.mockResolvedValue({ data: null, error: null });
     await expect(insertReceipt(baseDraft)).rejects.toThrow(/no row/);
+  });
+});
+
+describe('insertManualReceipt', () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    insertMock.mockClear();
+    selectMock.mockClear();
+    singleMock.mockReset();
+  });
+
+  const manualArgs = {
+    userId: 'u1',
+    merchantName: 'Tesco Mutiara',
+    receiptDate: '2026-04-15',
+    totalAmount: 89.5,
+    category: 'groceries',
+    sourceId: 'src-default',
+  };
+
+  it('inserts a manual-entry row tagged with source_id and returns the id', async () => {
+    singleMock.mockResolvedValue({ data: { id: 'manual-id' }, error: null });
+    const out = await insertManualReceipt(manualArgs);
+    expect(out).toEqual({ id: 'manual-id' });
+    expect(fromMock).toHaveBeenCalledWith('receipts');
+    expect(insertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: 'u1',
+        merchant_name: 'Tesco Mutiara',
+        receipt_date: '2026-04-15',
+        total_amount: 89.5,
+        currency: 'MYR',
+        category: 'groceries',
+        is_claimable: false,
+        is_manual_entry: true,
+        source_id: 'src-default',
+        tax_year: 2026,
+      }),
+    );
+    expect(selectMock).toHaveBeenCalledWith('id');
+  });
+
+  it('derives tax_year from the receipt_date year', async () => {
+    singleMock.mockResolvedValue({ data: { id: 'm2' }, error: null });
+    await insertManualReceipt({ ...manualArgs, receiptDate: '2024-06-01' });
+    const inserted = insertMock.mock.calls[0]![0] as { tax_year: number };
+    expect(inserted.tax_year).toBe(2024);
+  });
+
+  it('throws when supabase returns an error', async () => {
+    singleMock.mockResolvedValue({
+      data: null,
+      error: { message: 'rls violation' },
+    });
+    await expect(insertManualReceipt(manualArgs)).rejects.toMatchObject({
+      message: 'rls violation',
+    });
+  });
+
+  it('throws when the insert returns no row data', async () => {
+    singleMock.mockResolvedValue({ data: null, error: null });
+    await expect(insertManualReceipt(manualArgs)).rejects.toThrow(/no row/);
   });
 });

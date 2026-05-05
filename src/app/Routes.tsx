@@ -8,6 +8,7 @@ import Activity from '@/screens/Activity';
 import Cards from '@/screens/Cards';
 import Lhdn from '@/screens/Lhdn';
 import Capture from '@/screens/Capture';
+import CaptureManual from '@/screens/CaptureManual';
 import Advisor from '@/screens/Advisor';
 import Insights from '@/screens/Insights';
 import Rewards from '@/screens/Rewards';
@@ -98,6 +99,14 @@ export default function AppRoutes() {
           element={
             <Tab hideNav>
               <Capture />
+            </Tab>
+          }
+        />
+        <Route
+          path="/capture/manual"
+          element={
+            <Tab hideNav>
+              <CaptureManual />
             </Tab>
           }
         />

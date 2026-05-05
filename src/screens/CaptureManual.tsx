@@ -175,6 +175,7 @@ export default function CaptureManual() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          if (!saveDisabled) mutation.mutate();
         }}
         style={{
           position: 'relative',

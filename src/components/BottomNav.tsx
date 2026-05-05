@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Icon, type IconName } from './Icon';
+import CaptureSheet from './CaptureSheet';
 
 /**
  * Glassmorphic bottom nav with raised center FAB. Ported from
@@ -34,6 +36,7 @@ export default function BottomNav({ dark = false }: { dark?: boolean }) {
   const { pathname } = useLocation();
   const ic = dark ? 'rgba(255,255,255,0.65)' : MUTED;
   const acc = dark ? '#fff' : PURPLE;
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
     <div
@@ -70,9 +73,10 @@ export default function BottomNav({ dark = false }: { dark?: boolean }) {
         {ITEMS.map((it) => {
           if (it.fab) {
             return (
-              <Link
+              <button
                 key={it.id}
-                to={it.to}
+                type="button"
+                onClick={() => setSheetOpen(true)}
                 aria-label={it.label}
                 style={{
                   width: 64,
@@ -87,7 +91,8 @@ export default function BottomNav({ dark = false }: { dark?: boolean }) {
                   alignItems: 'center',
                   justifyContent: 'center',
                   border: '3px solid rgba(255,255,255,0.92)',
-                  textDecoration: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
                 }}
               >
                 <div
@@ -111,7 +116,7 @@ export default function BottomNav({ dark = false }: { dark?: boolean }) {
                 >
                   {it.label}
                 </span>
-              </Link>
+              </button>
             );
           }
           const isActive = pathname === it.to;
@@ -149,6 +154,7 @@ export default function BottomNav({ dark = false }: { dark?: boolean }) {
           );
         })}
       </div>
+      <CaptureSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
     </div>
   );
 }

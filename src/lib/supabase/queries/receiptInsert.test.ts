@@ -43,6 +43,7 @@ const baseDraft = {
   imageUrl: 'https://b2/img.jpg',
   imageFileId: 'f1',
   extracted: baseExtracted,
+  sourceId: 'src-x',
 };
 
 describe('toReceiptInsert', () => {
@@ -61,6 +62,7 @@ describe('toReceiptInsert', () => {
       is_verified: true,
       is_claimable: true,
       tax_year: 2026,
+      source_id: 'src-x',
     });
   });
 

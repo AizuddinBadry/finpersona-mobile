@@ -13,7 +13,7 @@
  *   - done:                  success banner with View receipt + Back to home
  *   - error:                 error banner + Retry / Cancel
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Field } from '@/components/Field';
 import { Icon } from '@/components/Icon';
@@ -53,6 +53,24 @@ export default function Capture() {
   }, [sourcesQuery.data]);
 
   const flow = useCaptureFlow({ defaultSourceId });
+
+  /**
+   * Race-condition guard: extraction can finish before usePaymentSources
+   * resolves. When that happens, useCaptureFlow seeds form.sourceId from an
+   * empty defaultSourceId and Save stays disabled with no clear signal why.
+   * Once sources actually arrive, push the resolved default into the form so
+   * the dropdown's value matches a real option and Save unlocks.
+   */
+  useEffect(() => {
+    if (
+      flow.phase === 'review' &&
+      flow.form &&
+      flow.form.sourceId === '' &&
+      defaultSourceId !== ''
+    ) {
+      flow.setForm((prev) => ({ ...prev, sourceId: defaultSourceId }));
+    }
+  }, [flow.phase, flow.form, defaultSourceId, flow.setForm]);
 
   return (
     <div

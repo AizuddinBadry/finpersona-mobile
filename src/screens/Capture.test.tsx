@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Capture from './Capture';
@@ -321,6 +321,53 @@ describe('Capture', () => {
       name: 'View receipt',
     }) as HTMLButtonElement;
     expect(viewBtn.disabled).toBe(true);
+  });
+
+  it('review: re-seeds form.sourceId when payment sources arrive after extraction', () => {
+    // Race condition guard: if extraction completes before usePaymentSources
+    // resolves, defaultSourceId is '' and the hook seeds form.sourceId to ''.
+    // Once sources arrive, the screen should push the resolved default into
+    // the form via setForm so Save isn't permanently disabled.
+    const setForm = vi.fn();
+    mockedUseCaptureFlow.mockReturnValue(
+      makeFlow({
+        phase: 'review',
+        form: { ...sampleForm, sourceId: '' },
+        setForm,
+      }),
+    );
+    // First render: sources still loading.
+    mockedUsePaymentSources.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    } as ReturnType<typeof usePaymentSources>);
+
+    const { rerender } = renderCapture();
+    // Nothing to seed from yet — setForm shouldn't have been called for sources.
+    const callsBeforeLoad = setForm.mock.calls.length;
+
+    // Sources arrive on the next render.
+    mockedUsePaymentSources.mockReturnValue({
+      data: sources,
+      isLoading: false,
+      isError: false,
+    } as ReturnType<typeof usePaymentSources>);
+
+    act(() => {
+      rerender(
+        <MemoryRouter initialEntries={['/capture']}>
+          <Capture />
+        </MemoryRouter>,
+      );
+    });
+
+    // setForm must have been called with an updater that fills in the default.
+    expect(setForm.mock.calls.length).toBeGreaterThan(callsBeforeLoad);
+    const updater = setForm.mock.calls[setForm.mock.calls.length - 1]![0] as (
+      f: ReviewForm,
+    ) => ReviewForm;
+    expect(updater({ ...sampleForm, sourceId: '' }).sourceId).toBe('src-default');
   });
 
   it('error: shows the error message and Try again retries via flow.start()', async () => {

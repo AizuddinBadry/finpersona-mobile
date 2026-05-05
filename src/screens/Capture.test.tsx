@@ -268,59 +268,44 @@ describe('Capture', () => {
     expect(saveBtn.disabled).toBe(true);
   });
 
-  it('done: shows the success banner with View receipt + Back to home buttons', () => {
+  it('done: navigates to /capture/success with amount, sourceName, receiptId state', () => {
+    // Done-phase rendering moved out of this screen and into CaptureSuccess
+    // (Task 9). Capture now redirects there when the flow finishes so the
+    // manual and scan paths share one celebration UI.
     mockedUseCaptureFlow.mockReturnValue(
-      makeFlow({ phase: 'done', insertedId: 'new-id' }),
+      makeFlow({
+        phase: 'done',
+        insertedId: 'new-id',
+        form: { ...sampleForm, sourceId: 'src-default' },
+      }),
     );
     renderCapture();
-    expect(screen.getByText('Receipt saved')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'View receipt' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Back to home' }),
-    ).toBeInTheDocument();
+    expect(navigate).toHaveBeenCalledWith('/capture/success', {
+      state: {
+        amount: sampleForm.totalAmount,
+        sourceName: 'Maybank Debit',
+        receiptId: 'new-id',
+      },
+    });
   });
 
-  it('done: clicking View receipt navigates to /receipts/<insertedId>', async () => {
+  it('done: still navigates to /capture/success when insertedId is null', () => {
+    // The success screen handles a missing receiptId by disabling View receipt;
+    // we shouldn't block the redirect here.
     mockedUseCaptureFlow.mockReturnValue(
-      makeFlow({ phase: 'done', insertedId: 'new-id' }),
+      makeFlow({
+        phase: 'done',
+        insertedId: null,
+        form: { ...sampleForm, sourceId: 'src-default' },
+      }),
     );
     renderCapture();
-    await userEvent.click(
-      screen.getByRole('button', { name: 'View receipt' }),
+    expect(navigate).toHaveBeenCalledWith(
+      '/capture/success',
+      expect.objectContaining({
+        state: expect.objectContaining({ receiptId: undefined }),
+      }),
     );
-    expect(navigate).toHaveBeenCalledWith('/receipts/new-id');
-  });
-
-  it('done: clicking Back to home navigates to /', async () => {
-    mockedUseCaptureFlow.mockReturnValue(
-      makeFlow({ phase: 'done', insertedId: 'new-id' }),
-    );
-    renderCapture();
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Back to home' }),
-    );
-    expect(navigate).toHaveBeenCalledWith('/');
-  });
-
-  it('done: does not auto-navigate — navigate stays untouched until a button is clicked', () => {
-    mockedUseCaptureFlow.mockReturnValue(
-      makeFlow({ phase: 'done', insertedId: 'new-id' }),
-    );
-    renderCapture();
-    expect(navigate).not.toHaveBeenCalled();
-  });
-
-  it('done: View receipt is disabled when insertedId is null', () => {
-    mockedUseCaptureFlow.mockReturnValue(
-      makeFlow({ phase: 'done', insertedId: null }),
-    );
-    renderCapture();
-    const viewBtn = screen.getByRole('button', {
-      name: 'View receipt',
-    }) as HTMLButtonElement;
-    expect(viewBtn.disabled).toBe(true);
   });
 
   it('review: re-seeds form.sourceId when payment sources arrive after extraction', () => {

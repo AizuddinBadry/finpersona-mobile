@@ -10,7 +10,8 @@
  *   - capturing/upload/etc.: spinner + status label
  *   - review:                editable parsed fields + LHDN toggle + Save
  *   - saving:                Save button shows pending state
- *   - done:                  success banner with View receipt + Back to home
+ *   - done:                  redirect to /capture/success (Task 9 — shared
+ *                            celebration screen with the manual flow)
  *   - error:                 error banner + Retry / Cancel
  */
 import { useEffect, useMemo } from 'react';
@@ -71,6 +72,26 @@ export default function Capture() {
       flow.setForm((prev) => ({ ...prev, sourceId: defaultSourceId }));
     }
   }, [flow.phase, flow.form, defaultSourceId, flow.setForm]);
+
+  /**
+   * Once the insert lands, hand off to the shared CaptureSuccess screen so
+   * scan and manual flows present the same "RM X deducted from <source>"
+   * celebration. We pass the amount, source label, and receipt id via router
+   * state — the success screen falls back to home if any of these are
+   * missing (e.g. a refresh).
+   */
+  useEffect(() => {
+    if (flow.phase !== 'done' || !flow.form) return;
+    const sourceName =
+      sourcesQuery.data?.find((s) => s.id === flow.form!.sourceId)?.name ?? '';
+    navigate('/capture/success', {
+      state: {
+        amount: flow.form.totalAmount,
+        sourceName,
+        receiptId: flow.insertedId ?? undefined,
+      },
+    });
+  }, [flow.phase, flow.form, flow.insertedId, sourcesQuery.data, navigate]);
 
   return (
     <div
@@ -196,13 +217,11 @@ export default function Capture() {
         )}
 
         {flow.phase === 'done' && (
-          <DoneBody
-            insertedId={flow.insertedId}
-            onViewReceipt={() => {
-              if (flow.insertedId) navigate(`/receipts/${flow.insertedId}`);
-            }}
-            onBackHome={() => navigate('/')}
-          />
+          // Body intentionally empty — the useEffect above redirects to
+          // /capture/success. We keep the case so the bottom-sheet doesn't
+          // pop a "no body" gap during the same render that schedules the
+          // navigate.
+          null
         )}
 
         {flow.phase === 'error' && (
@@ -509,76 +528,6 @@ function ReviewBody(props: {
           }}
         >
           {saving ? 'Saving…' : 'Save expense'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function DoneBody(props: {
-  insertedId: string | null;
-  onViewReceipt: () => void;
-  onBackHome: () => void;
-}) {
-  const { insertedId, onViewReceipt, onBackHome } = props;
-  return (
-    <div style={{ textAlign: 'center', padding: '40px 0' }}>
-      <div
-        className="flex items-center justify-center"
-        style={{
-          width: 72,
-          height: 72,
-          borderRadius: 36,
-          background: '#D6F5E5',
-          margin: '0 auto 12px',
-        }}
-      >
-        <Icon name="check" size={32} color="#1FB573" strokeWidth={2.6} />
-      </div>
-      <div className="font-bold text-ink" style={{ fontSize: 18, letterSpacing: -0.3 }}>
-        Receipt saved
-      </div>
-      <div className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-        What next?
-      </div>
-      <div
-        className="flex items-center"
-        style={{ gap: 10, marginTop: 20, padding: '0 4px' }}
-      >
-        <button
-          type="button"
-          onClick={onBackHome}
-          className="font-semibold"
-          style={{
-            flex: 1,
-            padding: '14px 0',
-            borderRadius: 14,
-            background: '#F5F2FE',
-            color: '#39314F',
-            fontSize: 14,
-            border: 'none',
-            letterSpacing: -0.1,
-          }}
-        >
-          Back to home
-        </button>
-        <button
-          type="button"
-          onClick={onViewReceipt}
-          disabled={!insertedId}
-          className="font-bold text-white shadow-purpleGlow"
-          style={{
-            flex: 1.4,
-            padding: '14px 0',
-            borderRadius: 14,
-            background: GRAD_HERO,
-            fontSize: 14,
-            border: 'none',
-            letterSpacing: -0.1,
-            opacity: insertedId ? 1 : 0.5,
-          }}
-        >
-          View receipt
         </button>
       </div>
     </div>

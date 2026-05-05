@@ -9,6 +9,11 @@ import { Icon } from './Icon';
  *
  * Hand-rolled (no Radix dep). Fixed-position overlay; not portaled — the
  * AppShell that hosts BottomNav already covers the viewport.
+ *
+ * The sheet is *always mounted* so it can animate up from the bottom on open
+ * (transform translateY(100%) → translateY(0)). When closed we toggle
+ * aria-hidden + pointerEvents off so it neither traps focus, blocks taps,
+ * nor announces itself to assistive tech.
  */
 
 const PURPLE = '#6E4CE6';
@@ -32,8 +37,6 @@ export default function CaptureSheet({ open, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
-
   const go = (to: string) => {
     navigate(to);
     onClose();
@@ -44,6 +47,7 @@ export default function CaptureSheet({ open, onClose }: Props) {
       <div
         data-testid="capture-sheet-backdrop"
         onClick={onClose}
+        aria-hidden="true"
         style={{
           position: 'fixed',
           inset: 0,
@@ -51,12 +55,16 @@ export default function CaptureSheet({ open, onClose }: Props) {
           backdropFilter: 'blur(2px)',
           WebkitBackdropFilter: 'blur(2px)',
           zIndex: 200,
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? 'auto' : 'none',
+          transition: 'opacity 220ms ease-out',
         }}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Add receipt"
+        aria-hidden={open ? 'false' : 'true'}
         style={{
           position: 'fixed',
           left: 0,
@@ -68,8 +76,9 @@ export default function CaptureSheet({ open, onClose }: Props) {
           borderTopRightRadius: 24,
           padding: '20px 20px calc(28px + env(safe-area-inset-bottom)) 20px',
           boxShadow: '0 -10px 40px rgba(60,40,140,0.18)',
-          transform: 'translateY(0)',
+          transform: open ? 'translateY(0)' : 'translateY(100%)',
           transition: 'transform 220ms ease-out',
+          pointerEvents: open ? 'auto' : 'none',
           display: 'flex',
           flexDirection: 'column',
           gap: 12,
@@ -98,6 +107,7 @@ export default function CaptureSheet({ open, onClose }: Props) {
         <button
           type="button"
           onClick={() => go('/capture')}
+          tabIndex={open ? 0 : -1}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -119,6 +129,7 @@ export default function CaptureSheet({ open, onClose }: Props) {
         <button
           type="button"
           onClick={() => go('/capture/manual')}
+          tabIndex={open ? 0 : -1}
           style={{
             display: 'flex',
             alignItems: 'center',

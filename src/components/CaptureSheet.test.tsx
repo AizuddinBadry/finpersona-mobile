@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import CaptureSheet from './CaptureSheet';
+import BottomNav from './BottomNav';
 
 // Spy on useNavigate so we can assert what each CTA does on click.
 // Mirrors the pattern in src/screens/Capture.test.tsx.
@@ -33,9 +34,12 @@ beforeEach(() => {
 });
 
 describe('CaptureSheet', () => {
-  it('does not render the dialog when open is false', () => {
+  it('marks the dialog as hidden when open is false', () => {
     renderSheet({ open: false });
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // Sheet is always mounted (so it can animate from translateY(100%) → 0),
+    // but it's hidden from AT and pointer events while closed.
+    const dialog = screen.getByRole('dialog', { hidden: true });
+    expect(dialog).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('renders a dialog with two CTAs when open is true', () => {
@@ -43,12 +47,28 @@ describe('CaptureSheet', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeInTheDocument();
     expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-hidden', 'false');
     expect(
       screen.getByRole('button', { name: /scan receipt/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /add manually/i }),
     ).toBeInTheDocument();
+  });
+
+  it('animates from off-screen to on-screen via translateY', () => {
+    const { rerender } = renderSheet({ open: false });
+    let dialog = screen.getByRole('dialog', { hidden: true });
+    expect(dialog.style.transform).toBe('translateY(100%)');
+
+    rerender(
+      <MemoryRouter initialEntries={['/']}>
+        <CaptureSheet open={true} onClose={vi.fn()} />
+      </MemoryRouter>,
+    );
+    dialog = screen.getByRole('dialog');
+    expect(dialog.style.transform).toBe('translateY(0)');
+    expect(dialog.style.transition).toMatch(/transform/);
   });
 
   it('clicking "Scan receipt" navigates to /capture and closes the sheet', async () => {
@@ -82,5 +102,27 @@ describe('CaptureSheet', () => {
     const { onClose } = renderSheet({ open: false });
     await userEvent.keyboard('{Escape}');
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('BottomNav + CaptureSheet integration', () => {
+  it('clicking the FAB opens the capture sheet', async () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <BottomNav />
+      </MemoryRouter>,
+    );
+
+    // Sheet is always mounted but aria-hidden until the FAB is pressed.
+    expect(
+      screen.queryByRole('dialog', { hidden: true }),
+    ).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /capture/i }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveAttribute('aria-hidden', 'false');
   });
 });

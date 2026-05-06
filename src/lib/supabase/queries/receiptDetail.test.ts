@@ -19,14 +19,14 @@ const eqUserDeleteMock = vi.fn(() => deleteResolver());
 const eqIdDeleteMock = vi.fn(() => ({ eq: eqUserDeleteMock }));
 const deleteMock = vi.fn(() => ({ eq: eqIdDeleteMock }));
 
-const fromMock = vi.fn(() => ({
+const fromMock = vi.fn((_table?: string) => ({
   select: selectMock,
   update: updateMock,
   delete: deleteMock,
 }));
 
 vi.mock('@/lib/supabase/client', () => ({
-  supabase: { from: (...args: unknown[]) => fromMock(...args) },
+  supabase: { from: (...args: unknown[]) => fromMock(...(args as [string])) },
 }));
 
 import { fetchReceipt, updateReceipt, deleteReceipt } from './receiptDetail';

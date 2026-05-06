@@ -89,6 +89,7 @@ export default function Capture() {
         amount: flow.form.totalAmount,
         sourceName,
         receiptId: flow.insertedId ?? undefined,
+        merchantName: flow.form.merchantName,
       },
     });
   }, [flow.phase, flow.form, flow.insertedId, sourcesQuery.data, navigate]);

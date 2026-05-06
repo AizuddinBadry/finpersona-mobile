@@ -9,7 +9,7 @@ const eqYearMock = vi.fn(() => ({ order: orderMock }));
 const eqActiveMock = vi.fn(() => ({ eq: eqYearMock }));
 const selectMock = vi.fn(() => ({ eq: eqActiveMock }));
 
-const fromMock = vi.fn(() => ({ select: selectMock }));
+const fromMock = vi.fn((_table?: string) => ({ select: selectMock }));
 
 vi.mock('@/lib/supabase/client', () => ({
   supabase: { from: (...args: unknown[]) => fromMock(...(args as [string])) },

@@ -7,7 +7,7 @@ const orderCreatedMock = vi.fn();
 const orderDefaultMock = vi.fn(() => ({ order: orderCreatedMock }));
 const eqMock = vi.fn(() => ({ order: orderDefaultMock }));
 const selectMock = vi.fn(() => ({ eq: eqMock }));
-const fromMock = vi.fn(() => ({ select: selectMock }));
+const fromMock = vi.fn((_table?: string) => ({ select: selectMock }));
 
 vi.mock('@/lib/supabase/client', () => ({
   supabase: { from: (...args: unknown[]) => fromMock(...(args as [string])) },

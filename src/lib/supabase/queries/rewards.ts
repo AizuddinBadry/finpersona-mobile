@@ -1,21 +1,21 @@
 /**
- * Rewards screen query — pulls user_points scalar and the latest points_transactions
- * (joined to the receipt that triggered each earn) for the recent earnings list,
- * plus a derived "receipts this week" streak count.
+ * Rewards screen query — pulls user_points, points_transactions (earn history),
+ * and the live rewards_catalog (active vouchers/gifts from the web admin).
+ *
+ * Tier is computed from lifetime_earned against static thresholds (no tier-config
+ * table exists — same approach as the web app).
  *
  * Stays on rewardsMock:
- *   - tier (no tier-config table yet — Phase 4 will compute from points thresholds)
- *   - multiplier (UI fixture; the actual multiplier is applied DB-side in
- *     points_transactions.multiplier_applied)
- *   - redeem catalog (no reward_catalog table on this project — admin web app
- *     drives that and the mobile screen treats it as a curated visual fixture)
+ *   - multiplier (UI fixture; actual multiplier lives in points_transactions.multiplier_applied)
+ *   - streak.days (no streak-days audit table yet)
  *   - footnote copy
  *
  * 1 point = RM 0.01 redeemable (matches the Phase 1 product copy).
  */
 import { supabase } from '@/lib/supabase/client';
 import type { CatIconName } from '@/components/CatIcon';
-import type { RewardsMock, RewardsRecent } from '@/mocks/seed';
+import type { IconName } from '@/components/Icon';
+import type { RewardItem, RewardsMock, RewardsRecent } from '@/mocks/seed';
 import { rewardsMock } from '@/mocks/seed';
 
 export type UserPointsScalarRow = {
@@ -40,8 +40,89 @@ export type EarnTxnRow = {
   } | null;
 };
 
+export type RewardsCatalogRow = {
+  id: string;
+  reward_name: string;
+  reward_description: string | null;
+  points_cost: string | number;
+  reward_type: string;
+  reward_value: string | number | null;
+  display_order: number;
+};
+
 const RECENT_LIMIT = 4;
 const POINTS_TO_RM = 0.01; // 1 pt = RM 0.01
+
+// ---------- tier computation ----------
+
+type TierDef = {
+  name: string;
+  min: number;
+  max: number;
+  next: string;
+  nextMultiplier: number;
+};
+
+const TIER_THRESHOLDS: TierDef[] = [
+  { name: 'Bronze', min: 0, max: 999, next: 'Sapphire', nextMultiplier: 1.2 },
+  { name: 'Sapphire', min: 1000, max: 4999, next: 'Amethyst', nextMultiplier: 1.5 },
+  { name: 'Amethyst', min: 5000, max: 9999, next: 'Diamond', nextMultiplier: 2.0 },
+  { name: 'Diamond', min: 10000, max: Infinity, next: 'Diamond', nextMultiplier: 2.0 },
+];
+
+export function computeTier(lifetimeEarned: number): RewardsMock['tier'] {
+  const t =
+    TIER_THRESHOLDS.find((d) => lifetimeEarned <= d.max) ??
+    TIER_THRESHOLDS[TIER_THRESHOLDS.length - 1]!;
+  const isDiamond = t.max === Infinity;
+  const range = isDiamond ? 1 : t.max - t.min + 1;
+  const progressPct = isDiamond
+    ? 100
+    : Math.max(0, Math.min(100, Math.round(((lifetimeEarned - t.min) / range) * 100)));
+  const pointsToNext = isDiamond ? 0 : Math.max(0, t.max + 1 - lifetimeEarned);
+  return {
+    name: t.name,
+    next: t.next,
+    progressPct,
+    pointsToNext,
+    nextMultiplier: t.nextMultiplier,
+  };
+}
+
+// ---------- catalog shaping ----------
+
+const REWARD_TYPE_ICON: Record<string, IconName> = {
+  voucher: 'gift',
+  gift: 'gift',
+  cash: 'bank',
+  donation: 'pulse',
+  other: 'star',
+};
+
+const REWARD_TYPE_COLOR: Record<string, string> = {
+  voucher: '#6E4CE6',
+  gift: '#F59E0B',
+  cash: '#10B981',
+  donation: '#EF4444',
+  other: '#6E4CE6',
+};
+
+export function shapeCatalogItem(row: RewardsCatalogRow): RewardItem {
+  const pts = Math.round(Number(row.points_cost));
+  const sub = row.reward_value
+    ? `RM ${Number(row.reward_value).toFixed(0)} value`
+    : (row.reward_description ?? undefined);
+  return {
+    id: row.id,
+    name: row.reward_name,
+    pts,
+    brandColor: REWARD_TYPE_COLOR[row.reward_type] ?? '#6E4CE6',
+    icon: REWARD_TYPE_ICON[row.reward_type] ?? 'star',
+    sub,
+  };
+}
+
+// ---------- category → CatIcon ----------
 
 function categoryToCatIcon(category: string | null): CatIconName {
   if (!category) return 'receipt';
@@ -52,7 +133,7 @@ function categoryToCatIcon(category: string | null): CatIconName {
   if (c.includes('shop') || c.includes('cloth')) return 'bag';
   if (c.includes('transport') || c.includes('fuel') || c.includes('petrol')) return 'car';
   if (c.includes('medical') || c.includes('health') || c.includes('clinic') || c.includes('klinik')) return 'medical';
-  if (c.includes('education') || c.includes('course')) return 'star';
+  if (c.includes('education') || c.includes('course')) return 'book';
   return 'receipt';
 }
 
@@ -99,31 +180,30 @@ export function receiptsThisWeek(rows: EarnTxnRow[], now: Date = new Date()): nu
 export function shapeRewards(args: {
   points: UserPointsScalarRow | null;
   earnTxns: EarnTxnRow[];
+  catalog?: RewardsCatalogRow[];
   now?: Date;
 }): RewardsMock {
-  const { points, earnTxns, now = new Date() } = args;
+  const { points, earnTxns, catalog = [], now = new Date() } = args;
   const balancePts = points ? Math.round(Number(points.current_balance)) : 0;
+  const lifetimeEarned = points ? Math.round(Number(points.lifetime_earned)) : 0;
 
   return {
     balancePts,
     redeemableMyr: Math.round(balancePts * POINTS_TO_RM * 100) / 100,
-    // Tier thresholds aren't in the schema yet — keep mock values but make
-    // them feel less stale by capping progressPct at the user's relative
-    // position toward `pointsToNext` if we ever wire it. For now, mock.
-    tier: rewardsMock.tier,
+    tier: computeTier(lifetimeEarned),
     streak: {
       ...rewardsMock.streak,
       receiptsThisWeek: receiptsThisWeek(earnTxns, now),
     },
     multiplier: rewardsMock.multiplier,
-    redeem: rewardsMock.redeem,
+    redeem: catalog.length > 0 ? catalog.map(shapeCatalogItem) : rewardsMock.redeem,
     recent: shapeRecent(earnTxns),
     footnote: rewardsMock.footnote,
   };
 }
 
 export async function fetchRewards(userId: string): Promise<RewardsMock> {
-  const [pointsRes, txnRes] = await Promise.all([
+  const [pointsRes, txnRes, catalogRes] = await Promise.all([
     supabase
       .from('user_points')
       .select('user_id, current_balance, lifetime_earned')
@@ -140,12 +220,38 @@ export async function fetchRewards(userId: string): Promise<RewardsMock> {
       .eq('transaction_type', 'earn_receipt')
       .order('created_at', { ascending: false })
       .limit(50),
+    supabase
+      .from('rewards_catalog')
+      .select('id, reward_name, reward_description, points_cost, reward_type, reward_value, display_order')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true }),
   ]);
   if (pointsRes.error) throw pointsRes.error;
   if (txnRes.error) throw txnRes.error;
+  if (catalogRes.error) throw catalogRes.error;
 
   return shapeRewards({
     points: (pointsRes.data ?? null) as UserPointsScalarRow | null,
     earnTxns: (txnRes.data ?? []) as unknown as EarnTxnRow[],
+    catalog: (catalogRes.data ?? []) as RewardsCatalogRow[],
   });
+}
+
+/**
+ * Atomically claim a reward via the `claim_reward` Postgres RPC.
+ * The function validates balance, deducts points, creates a reward_claims row,
+ * and decrements stock_quantity — all in a single DB transaction.
+ * Throws with a human-readable message on failure.
+ */
+export async function claimReward(userId: string, rewardId: string): Promise<void> {
+  const { error } = await supabase.rpc('claim_reward', {
+    p_user_id: userId,
+    p_reward_id: rewardId,
+  });
+  if (error) {
+    const msg = error.message ?? '';
+    if (msg.toLowerCase().includes('insufficient')) throw new Error('Insufficient points to redeem this reward.');
+    if (msg.toLowerCase().includes('stock') || msg.toLowerCase().includes('out of')) throw new Error('This reward is out of stock.');
+    throw new Error('Could not complete redemption. Please try again.');
+  }
 }

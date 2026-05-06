@@ -94,6 +94,7 @@ export default function CaptureManual() {
           amount: totalAmount,
           sourceName,
           receiptId: res.id,
+          merchantName: merchant,
         },
       });
     },

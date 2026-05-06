@@ -25,6 +25,7 @@ export type IconName =
   | 'plus'
   | 'bell'
   | 'eye'
+  | 'eyeOff'
   | 'star'
   | 'transfer'
   | 'food'
@@ -46,7 +47,17 @@ export type IconName =
   | 'flash'
   | 'close'
   | 'check'
-  | 'moreV';
+  | 'moreV'
+  | 'splitBill'
+  | 'qrCode'
+  | 'chevronUp'
+  | 'mapPin'
+  | 'plane'
+  | 'calendar'
+  | 'moon'
+  | 'people'
+  | 'wallet'
+  | 'package';
 
 type Props = {
   name: IconName;
@@ -169,6 +180,13 @@ export function Icon({
         <circle cx="12" cy="12" r="3" />
       </g>
     ),
+    eyeOff: (
+      <g {...stroke}>
+        <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94" />
+        <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19" />
+        <line x1="1" y1="1" x2="23" y2="23" />
+      </g>
+    ),
     star: (
       <path
         {...stroke}
@@ -288,6 +306,62 @@ export function Icon({
         <circle cx="12" cy="5" r="1" />
         <circle cx="12" cy="12" r="1" />
         <circle cx="12" cy="19" r="1" />
+      </g>
+    ),
+    splitBill: (
+      <g {...stroke}>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="M12 5v14M3 12h18" />
+      </g>
+    ),
+    qrCode: (
+      <g {...stroke}>
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <path d="M14 14h2v2h-2zM18 14h3M14 18h2M18 18h3v3M14 21h2" />
+      </g>
+    ),
+    chevronUp: <path {...stroke} d="M18 15l-6-6-6 6" />,
+    mapPin: (
+      <g {...stroke}>
+        <path d="M12 2C8.7 2 6 4.7 6 8c0 5 6 12 6 12s6-7 6-12c0-3.3-2.7-6-6-6z" />
+        <circle cx="12" cy="8" r="2" />
+      </g>
+    ),
+    plane: (
+      <g {...stroke}>
+        <path d="M21 12l-18 6 4-6-4-6 18 6z" />
+      </g>
+    ),
+    calendar: (
+      <g {...stroke}>
+        <rect x="3" y="4" width="18" height="17" rx="2" />
+        <path d="M16 2v4M8 2v4M3 10h18" />
+      </g>
+    ),
+    moon: (
+      <path {...stroke} d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z" />
+    ),
+    people: (
+      <g {...stroke}>
+        <circle cx="9" cy="7" r="3" />
+        <path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" />
+        <path d="M16 3a3 3 0 010 6M21 21v-2a4 4 0 00-3-3.87" />
+      </g>
+    ),
+    wallet: (
+      <g {...stroke}>
+        <path d="M3 6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6z" />
+        <path d="M16 12h.01" />
+        <path d="M3 10h18" />
+      </g>
+    ),
+    package: (
+      <g {...stroke}>
+        <path d="M12 2l9 4.5V18L12 22 3 17.5V6.5L12 2z" />
+        <path d="M12 22V12M3 6.5l9 5.5 9-5.5" />
+        <path d="M7.5 4.2l9 4.3" />
       </g>
     ),
   };

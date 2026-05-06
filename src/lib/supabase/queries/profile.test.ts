@@ -11,13 +11,13 @@ const selectMock = vi.fn(() => ({ eq: eqIdSelectMock }));
 const eqIdUpdateMock = vi.fn(() => ({ select: selectAfterUpdateMock }));
 const updateMock = vi.fn(() => ({ eq: eqIdUpdateMock }));
 
-const fromMock = vi.fn(() => ({
+const fromMock = vi.fn((_table?: string) => ({
   select: selectMock,
   update: updateMock,
 }));
 
 vi.mock('@/lib/supabase/client', () => ({
-  supabase: { from: (...args: unknown[]) => fromMock(...args) },
+  supabase: { from: (...args: unknown[]) => fromMock(...(args as [string])) },
 }));
 
 import { fetchProfile, updateProfilePersona } from './profile';

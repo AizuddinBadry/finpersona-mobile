@@ -298,8 +298,9 @@ export const activityMock: ActivityMock = {
 
 /**
  * Cards screen mock — visual port of
- * Finpersona-mobile-build/screens-3.jsx. Stack of bank cards, a move-money
- * form fixture, and three auto-deduct rules with toggle defaults.
+ * Finpersona-mobile-build/screens-3.jsx. Stack of bank cards and a
+ * move-money form fixture. Commitments are fetched separately via
+ * useCommitments and backed by the `commitments` Supabase table.
  */
 export type CardItem = {
   id: string;
@@ -312,12 +313,17 @@ export type CardItem = {
   primary?: boolean;
 };
 
-export type AutoDeductRule = {
+export type Commitment = {
   id: string;
-  category: string;
-  from: string;
-  icon: CatIconName;
-  defaultEnabled: boolean;
+  name: string;
+  amount: number;
+  due_day: number | null;
+  commitment_type: 'manual' | 'invoice' | 'direct_debit' | 'subscription';
+  is_active: boolean;
+  notify_enabled: boolean;
+  source_id: string | null;
+  source_name: string | null;
+  notes: string | null;
 };
 
 export type CardsMock = {
@@ -333,7 +339,6 @@ export type CardsMock = {
     amountMyr: string;
     convertedLabel: string;
   };
-  rules: AutoDeductRule[];
 };
 
 export const cardsMock: CardsMock = {
@@ -387,37 +392,53 @@ export const cardsMock: CardsMock = {
     amountMyr: '500.00',
     convertedLabel: '≈ S$ 148.00',
   },
-  rules: [
-    {
-      id: 'r1',
-      category: 'Dining & groceries',
-      from: 'Maybank Visa',
-      icon: 'food',
-      defaultEnabled: true,
-    },
-    {
-      id: 'r2',
-      category: 'Bills & subscriptions',
-      from: 'CIMB Debit',
-      icon: 'home2',
-      defaultEnabled: true,
-    },
-    {
-      id: 'r3',
-      category: 'Online shopping (USD)',
-      from: 'Wise USD',
-      icon: 'bag',
-      defaultEnabled: false,
-    },
-  ],
 };
+
+export const commitmentsMock: Commitment[] = [
+  {
+    id: 'cm1',
+    name: 'Netflix',
+    amount: 54.9,
+    due_day: 15,
+    commitment_type: 'subscription',
+    is_active: true,
+    notify_enabled: true,
+    source_id: null,
+    source_name: 'Maybank Visa',
+    notes: null,
+  },
+  {
+    id: 'cm2',
+    name: 'Astro Bill',
+    amount: 139.0,
+    due_day: 3,
+    commitment_type: 'invoice',
+    is_active: true,
+    notify_enabled: true,
+    source_id: null,
+    source_name: 'CIMB Debit',
+    notes: null,
+  },
+  {
+    id: 'cm3',
+    name: 'Gym Membership',
+    amount: 180.0,
+    due_day: 1,
+    commitment_type: 'direct_debit',
+    is_active: false,
+    notify_enabled: false,
+    source_id: null,
+    source_name: 'Maybank Visa',
+    notes: 'Suspended for now',
+  },
+];
 
 /**
  * LHDN screen mock — visual port of
  * Finpersona-mobile-build/screens-4.jsx. Tax-relief category caps and
  * recently tagged transactions for YA 2025.
  */
-export type LhdnIconName = 'book' | 'medical' | 'pulse' | 'flash' | 'star';
+export type LhdnIconName = string;
 
 export type LhdnCategory = {
   id: string;
@@ -715,9 +736,18 @@ export const insightsMock: InsightsMock = {
  * headroom = totalCap - totalClaimed, categoryCount counts categories with
  * cap - claimed > 0.
  */
-// Use the LHDN-leaning relief icon palette plus 'receipt' for the synthetic
-// Other-claimable trailer (CatIconName doesn't carry pulse/flash/star).
-export type ClaimableIconName = LhdnIconName | 'receipt';
+// LHDN-leaning relief icon palette plus a few extras so each tax_categories
+// code in the DB seed (zakat, childcare, sspn, insurance_epf, domestic_travel,
+// ev_charging, breastfeeding, disabled_equipment, uncategorized, …) can render
+// with a distinct icon instead of all collapsing to the receipt fallback.
+export type ClaimableIconName =
+  | LhdnIconName
+  | 'receipt'
+  | 'gift'
+  | 'shield'
+  | 'home2'
+  | 'bank'
+  | 'car';
 
 export type ClaimableCategory = {
   code: string;

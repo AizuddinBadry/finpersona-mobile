@@ -173,11 +173,17 @@ vi.mock('@/lib/supabase/client', () => ({
 import { fetchClaimableInsights } from '@/lib/supabase/queries/insights';
 import { claimableInsightsMock } from '@/mocks/seed';
 
+// Mirrors the real DB seed (migrations 005 + 009): zakat is unlimited
+// (max_relief 999999) and is excluded from totalCap / donut weighting via the
+// UNLIMITED_CAP_THRESHOLD; education stands in for the previous fixture's
+// fictional `internet` row (DB has no internet code — internet subscriptions
+// bucket into `lifestyle` per the seed description).
 const taxCats2026 = [
+  { id: 'tc0', code: 'zakat', name: 'Zakat', max_relief: '999999', tax_year: 2026, sort_order: 0 },
   { id: 'tc1', code: 'lifestyle', name: 'Lifestyle', max_relief: '2500', tax_year: 2026, sort_order: 1 },
   { id: 'tc2', code: 'medical_health', name: 'Medical & Health', max_relief: '10000', tax_year: 2026, sort_order: 2 },
   { id: 'tc3', code: 'sports', name: 'Sports Equipment', max_relief: '500', tax_year: 2026, sort_order: 3 },
-  { id: 'tc4', code: 'internet', name: 'Internet subscription', max_relief: '2500', tax_year: 2026, sort_order: 4 },
+  { id: 'tc4', code: 'education', name: 'Education', max_relief: '7000', tax_year: 2026, sort_order: 4 },
 ];
 
 beforeEach(() => {
@@ -191,12 +197,15 @@ beforeEach(() => {
 });
 
 describe('fetchClaimableInsights', () => {
-  it('aggregates claimed amounts per category from receipts (lifestyle/medical/internet)', async () => {
+  it('aggregates claimed amounts per category from receipts (lifestyle absorbs internet keywords)', async () => {
     fetchActiveTaxCategoriesMock.mockResolvedValue(taxCats2026);
     lteRecMock.mockResolvedValue({
       data: [
         { id: 'r1', total_amount: '142', category: 'Lifestyle', receipt_date: '2026-04-01' },
         { id: 'r2', total_amount: '85', category: 'Klinik Mediviron visit', receipt_date: '2026-04-10' },
+        // 'Internet broadband' buckets into lifestyle now — the DB has no
+        // internet code; lifestyle covers internet subscriptions per the
+        // migration 005 seed description.
         { id: 'r3', total_amount: '100', category: 'Internet broadband', receipt_date: '2026-05-01' },
       ],
       error: null,
@@ -205,10 +214,11 @@ describe('fetchClaimableInsights', () => {
     const out = await fetchClaimableInsights('u1', 2026);
 
     const byCode = Object.fromEntries(out.categories.map((c) => [c.code, c]));
-    expect(byCode.lifestyle.claimed).toBe(142);
+    expect(byCode.lifestyle.claimed).toBe(242); // 142 + 100
     expect(byCode.medical_health.claimed).toBe(85);
-    expect(byCode.internet.claimed).toBe(100);
     expect(byCode.sports.claimed).toBe(0);
+    expect(byCode.education.claimed).toBe(0);
+    expect(byCode.zakat.claimed).toBe(0);
   });
 
   it('appends an "Other claimable" bucket (cap: 0) at the END when receipts do not bucket', async () => {
@@ -254,11 +264,12 @@ describe('fetchClaimableInsights', () => {
       data: [
         // sports: 350 / 500 = 0.70  (highest)
         { id: 'r1', total_amount: '350', category: 'Sports', receipt_date: '2026-04-01' },
-        // lifestyle: 1250 / 2500 = 0.50
-        { id: 'r2', total_amount: '1250', category: 'Lifestyle', receipt_date: '2026-04-02' },
-        // internet: 250 / 2500 = 0.10
-        { id: 'r3', total_amount: '250', category: 'Internet', receipt_date: '2026-04-03' },
+        // education: 3500 / 7000 = 0.50
+        { id: 'r2', total_amount: '3500', category: 'Skills training', receipt_date: '2026-04-02' },
+        // lifestyle: 250 / 2500 = 0.10
+        { id: 'r3', total_amount: '250', category: 'Lifestyle', receipt_date: '2026-04-03' },
         // medical_health: 0 / 10000 = 0
+        // zakat: 0 / 999999 = 0 (unlimited — sorts as 0)
         // Plus an Other bucket so we can prove it's appended LAST not sorted in.
         { id: 'r4', total_amount: '40', category: 'Mystery', receipt_date: '2026-04-04' },
       ],
@@ -267,11 +278,12 @@ describe('fetchClaimableInsights', () => {
 
     const out = await fetchClaimableInsights('u1', 2026);
 
-    // Strip the Other-claimable trailer and check the cap-list order.
-    const codes = out.categories
-      .filter((c) => c.code !== 'other-claimable')
+    // Strip the Other-claimable trailer and check the top of the cap-list
+    // order — the three categories with claimed > 0 must come in pct order.
+    const topCodes = out.categories
+      .filter((c) => c.code !== 'other-claimable' && c.claimed > 0)
       .map((c) => c.code);
-    expect(codes).toEqual(['sports', 'lifestyle', 'internet', 'medical_health']);
+    expect(topCodes).toEqual(['sports', 'education', 'lifestyle']);
     // Other claimable trailer present and last.
     expect(out.categories[out.categories.length - 1].code).toBe('other-claimable');
   });
@@ -304,7 +316,7 @@ describe('fetchClaimableInsights', () => {
     });
   });
 
-  it('counts only categories with headroom > 0 in categoryCount (skips fully-utilized)', async () => {
+  it('counts only finite-cap categories with headroom > 0 (skips fully-utilized, unlimited, Other)', async () => {
     fetchActiveTaxCategoriesMock.mockResolvedValue(taxCats2026);
     lteRecMock.mockResolvedValue({
       data: [
@@ -313,8 +325,9 @@ describe('fetchClaimableInsights', () => {
         // lifestyle partly: 100 / 2500 → headroom 2400, counted.
         { id: 'r2', total_amount: '100', category: 'Lifestyle', receipt_date: '2026-04-02' },
         // medical_health: 0 / 10000 → headroom 10000, counted.
-        // internet: 0 / 2500 → headroom 2500, counted.
-        // Other claimable: cap 0 → headroom 0, NOT counted.
+        // education: 0 / 7000 → headroom 7000, counted.
+        // zakat: cap 999999 (unlimited) → NOT counted regardless of claimed.
+        // Other claimable: cap 0 → NOT counted.
         { id: 'r3', total_amount: '20', category: 'Mystery', receipt_date: '2026-04-03' },
       ],
       error: null,
@@ -322,41 +335,57 @@ describe('fetchClaimableInsights', () => {
 
     const out = await fetchClaimableInsights('u1', 2026);
 
+    // lifestyle + medical_health + education = 3.
     expect(out.categoryCount).toBe(3);
   });
 
-  it('falls back to claimableInsightsMock when tax_categories returns zero rows for the year', async () => {
+  it('returns an empty real-data shape when tax_categories has zero rows for the year', async () => {
     // tax_categories not seeded for this year (e.g. mid-rollover before the
-    // new YA is populated) — should mirror fetchLhdn's empty-list fallback.
+    // new YA is populated). The data layer no longer falls back to a mock —
+    // it surfaces an honestly empty ClaimableInsights so the screen can
+    // render its real empty state instead of demo numbers.
     fetchActiveTaxCategoriesMock.mockResolvedValue([]);
     lteRecMock.mockResolvedValue({ data: [], error: null });
 
     const out = await fetchClaimableInsights('u1', 2099);
 
-    expect(out).toBe(claimableInsightsMock);
+    expect(out).not.toBe(claimableInsightsMock);
+    expect(out.totalCap).toBe(0);
+    expect(out.totalClaimed).toBe(0);
+    expect(out.headroom).toBe(0);
+    expect(out.categoryCount).toBe(0);
+    expect(out.categories).toEqual([]);
   });
 
-  it('totals are internally consistent (totalCap excludes Other; headroom clamped >= 0)', async () => {
+  it('totals are internally consistent (totalCap excludes Other and unlimited; headroom clamped >= 0)', async () => {
     fetchActiveTaxCategoriesMock.mockResolvedValue(taxCats2026);
     lteRecMock.mockResolvedValue({
       data: [
-        // Over-claim sports by a lot: pct should clamp to 1, headroom not negative.
+        // Over-claim sports: pct clamps to 1, headroom doesn't go negative.
         { id: 'r1', total_amount: '5000', category: 'Sports', receipt_date: '2026-04-01' },
-        { id: 'r2', total_amount: '60', category: 'Mystery', receipt_date: '2026-04-02' },
+        // Zakat (unlimited): claimed flows into totalClaimed but cap is
+        // excluded from totalCap.
+        { id: 'r2', total_amount: '300', category: 'Zakat fitrah', receipt_date: '2026-04-02' },
+        { id: 'r3', total_amount: '60', category: 'Mystery', receipt_date: '2026-04-03' },
       ],
       error: null,
     });
 
     const out = await fetchClaimableInsights('u1', 2026);
 
-    // totalCap = 2500 + 10000 + 500 + 2500 = 15500 (Other excluded)
-    expect(out.totalCap).toBe(15500);
-    // totalClaimed includes Other.
-    expect(out.totalClaimed).toBe(5060);
-    // headroom = max(15500 - 5060, 0) = 10440
-    expect(out.headroom).toBe(10440);
+    // totalCap = 2500 + 10000 + 500 + 7000 = 20000
+    //   (zakat 999999 unlimited → excluded; Other cap 0 → excluded)
+    expect(out.totalCap).toBe(20000);
+    // totalClaimed = 5000 (sports) + 300 (zakat) + 60 (other) = 5360
+    expect(out.totalClaimed).toBe(5360);
+    // headroom = max(20000 - 5360, 0) = 14640
+    expect(out.headroom).toBe(14640);
     // sports pct clamped to 1.
     const sports = out.categories.find((c) => c.code === 'sports');
     expect(sports?.pct).toBe(1);
+    // zakat is in the categories list with claimed amount but excluded from
+    // totalCap and categoryCount.
+    const zakat = out.categories.find((c) => c.code === 'zakat');
+    expect(zakat?.claimed).toBe(300);
   });
 });

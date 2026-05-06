@@ -41,39 +41,196 @@ export type ReceiptRow = {
   created_at: string;
 };
 
+// Caps at or above this threshold are treated as "no cap" (Zakat is seeded
+// with max_relief = 999999 to mean fully deductible / unlimited).
+export const LHDN_UNLIMITED_CAP = 100_000;
+
 type Visual = { icon: LhdnIconName; color: string; displayName?: string };
 
-// Maps tax_categories.code → screen palette. Codes not listed here are skipped
-// from the categories list (they exist in the DB but the mobile screen only
-// surfaces the 5 most-used reliefs; the full list lives in the web app).
+// Maps every tax_categories.code → mobile palette. All 13 seeded codes are
+// covered so shapeLhdn never silently drops a category.
 const CATEGORY_VISUALS: Record<string, Visual> = {
-  lifestyle: { icon: 'book', color: '#6E4CE6' },
-  medical_health: { icon: 'medical', color: '#D63440', displayName: 'Medical (self & family)' },
-  sports: { icon: 'pulse', color: '#1FB573', displayName: 'Sports equipment' },
-  internet: { icon: 'flash', color: '#1E80B5', displayName: 'Internet subscription' },
-  education: { icon: 'star', color: '#E89B2A', displayName: 'Skills & training' },
+  lifestyle:          { icon: 'book',    color: '#6E4CE6' },
+  medical_health:     { icon: 'medical', color: '#D63440', displayName: 'Medical (self & family)' },
+  sports:             { icon: 'pulse',   color: '#1FB573', displayName: 'Sports equipment' },
+  education:          { icon: 'star',    color: '#E89B2A', displayName: 'Skills & training' },
+  zakat:              { icon: 'shield',  color: '#1A7F5A' },
+  childcare:          { icon: 'home2',   color: '#E8833A' },
+  sspn:               { icon: 'bank',    color: '#1E80B5', displayName: 'SSPN savings' },
+  insurance_epf:      { icon: 'lock',    color: '#8C5EC5', displayName: 'Insurance & EPF' },
+  domestic_travel:    { icon: 'car',     color: '#D97706', displayName: 'Domestic travel' },
+  ev_charging:        { icon: 'flash',   color: '#059669', displayName: 'EV charging' },
+  breastfeeding:      { icon: 'medical', color: '#DB2777', displayName: 'Breastfeeding equipment' },
+  disabled_equipment: { icon: 'shield',  color: '#7A7392', displayName: 'Disabled equipment' },
+  uncategorized:      { icon: 'receipt', color: '#A89DC1' },
 };
 
 /**
  * Map a free-text receipts.category onto a tax_categories.code. Returns null
- * if the category doesn't fall into any of the surfaced reliefs (e.g. a
- * 'food' receipt — not a relief).
+ * if the category doesn't fall into any of the seeded LHDN reliefs (e.g. a
+ * generic 'food' receipt — not a relief).
+ *
+ * The seeded codes (migrations 005 + 009) are: zakat, medical_health,
+ * lifestyle, education, sports, childcare, sspn, insurance_epf,
+ * domestic_travel, ev_charging, breastfeeding, disabled_equipment,
+ * uncategorized. Internet subscriptions are part of `lifestyle` per the seed
+ * description — there is no `internet` row in the DB, so internet keywords
+ * bucket into `lifestyle`.
+ *
+ * Two-stage matching:
+ *   1. Direct code/display-name match: the backend's Claude extraction prompt
+ *      asks it to return the literal tax_categories.code (e.g.
+ *      'domestic_travel', 'medical_health'), so most live receipts already
+ *      carry a valid code. Recognise that exact match first to avoid
+ *      substring traps (`'domestic_travel'.includes('domestic travel')` is
+ *      false because of the underscore; `'medical_health'` would otherwise
+ *      get misrouted by the ordering of the keyword fallthrough).
+ *   2. Free-text keyword fallback for legacy / human-entered values.
+ *
+ * Order in the keyword fallback matters: more specific keywords come first so
+ * a phrase like "travel insurance" hits `insurance_epf` rather than
+ * `domestic_travel`. Likewise `'transport'.includes('sport')` would otherwise
+ * misclassify transport receipts — `domestic_travel` runs before `sports`.
  */
+const KNOWN_CODES = new Set([
+  'zakat',
+  'medical_health',
+  'lifestyle',
+  'education',
+  'sports',
+  'childcare',
+  'sspn',
+  'insurance_epf',
+  'domestic_travel',
+  'ev_charging',
+  'breastfeeding',
+  'disabled_equipment',
+  'uncategorized',
+]);
+
 export function categoryToCode(category: string | null): string | null {
   if (!category) return null;
-  const c = category.toLowerCase();
-  if (c.includes('book') || c.includes('lifestyle') || c.includes('learn')) return 'lifestyle';
+  const c = category.toLowerCase().trim();
+
+  // Stage 1: receipts whose category is already a literal code (the common
+  // case — backend Claude extraction returns codes verbatim).
+  // Accept both 'domestic_travel' and 'domestic travel' / 'domestic-travel'
+  // by normalising separators to underscore before the set lookup.
+  const normalised = c.replace(/[\s-]+/g, '_');
+  if (KNOWN_CODES.has(normalised)) {
+    // 'uncategorized' is in the DB but isn't a real relief — surface as null
+    // so it routes to the Other claimable trailer instead.
+    return normalised === 'uncategorized' ? null : normalised;
+  }
+
+  // Stage 2: free-text keyword fallback.
+
+  // Zakat — religious obligation, fully deductible.
+  if (c.includes('zakat') || c.includes('fitrah')) return 'zakat';
+
+  // Insurance & EPF — runs before travel/sports so 'travel insurance' /
+  // 'sports insurance' bucket as insurance, not as the activity.
+  if (
+    c.includes('insurance') ||
+    c.includes('epf') ||
+    c.includes('kwsp') ||
+    c.includes('takaful') ||
+    c.includes('life policy')
+  ) return 'insurance_epf';
+
+  // Medical & health.
   if (
     c.includes('medical') ||
     c.includes('health') ||
     c.includes('clinic') ||
     c.includes('klinik') ||
     c.includes('pharma') ||
-    c.includes('dental')
+    c.includes('dental') ||
+    c.includes('hospital')
   ) return 'medical_health';
-  if (c.includes('sport') || c.includes('gym') || c.includes('fitness')) return 'sports';
-  if (c.includes('internet') || c.includes('broadband') || c.includes('unifi') || c.includes('streamyx')) return 'internet';
-  if (c.includes('education') || c.includes('course') || c.includes('skill') || c.includes('training')) return 'education';
+
+  // SSPN — child education savings.
+  if (c.includes('sspn')) return 'sspn';
+
+  // Childcare / kindergarten / daycare.
+  if (
+    c.includes('childcare') ||
+    c.includes('child care') ||
+    c.includes('daycare') ||
+    c.includes('kindergarten') ||
+    c.includes('tadika') ||
+    c.includes('nursery')
+  ) return 'childcare';
+
+  // Breastfeeding — runs before generic 'baby' / lifestyle.
+  if (
+    c.includes('breast') ||
+    c.includes('lactation') ||
+    c.includes('breastfeeding')
+  ) return 'breastfeeding';
+
+  // Disabled equipment — wheelchair, hearing aid, etc.
+  if (
+    c.includes('disabled') ||
+    c.includes('disability') ||
+    c.includes('wheelchair') ||
+    c.includes('hearing aid')
+  ) return 'disabled_equipment';
+
+  // EV charging — runs before lifestyle so 'EV charger' doesn't fall through
+  // to a generic electronics bucket.
+  if (
+    c.includes('ev charg') ||
+    c.includes('ev-charg') ||
+    c.includes('electric vehicle charg') ||
+    c.includes('charging station')
+  ) return 'ev_charging';
+
+  // Domestic travel — runs BEFORE sports because 'transport'.includes('sport')
+  // would otherwise misclassify transport receipts.
+  if (
+    c.includes('hotel') ||
+    c.includes('homestay') ||
+    c.includes('domestic travel') ||
+    c.includes('domestic tourism') ||
+    c.includes('accommodation') ||
+    c.includes('resort') ||
+    c.includes('transport')
+  ) return 'domestic_travel';
+
+  // Sports & fitness.
+  if (
+    c.includes('sport') ||
+    c.includes('gym') ||
+    c.includes('fitness')
+  ) return 'sports';
+
+  // Education / skills training.
+  if (
+    c.includes('education') ||
+    c.includes('course') ||
+    c.includes('skill') ||
+    c.includes('training') ||
+    c.includes('tuition')
+  ) return 'education';
+
+  // Lifestyle — books, electronics, internet subscriptions (DB has no
+  // separate `internet` code; the lifestyle row covers them per its seed
+  // description). Must run AFTER all the more-specific buckets above.
+  if (
+    c.includes('book') ||
+    c.includes('lifestyle') ||
+    c.includes('learn') ||
+    c.includes('internet') ||
+    c.includes('broadband') ||
+    c.includes('unifi') ||
+    c.includes('streamyx') ||
+    c.includes('smartphone') ||
+    c.includes('tablet') ||
+    c.includes('computer') ||
+    c.includes('laptop')
+  ) return 'lifestyle';
+
   return null;
 }
 
@@ -131,21 +288,50 @@ export function shapeLhdn(
   }
 
   // Build category list in tax_categories.sort_order, but only for codes the
-  // mobile screen has visuals for.
+  // mobile screen has visuals for. Cap is stored as 0 when the DB value
+  // signals "unlimited" (≥ LHDN_UNLIMITED_CAP, e.g. Zakat = 999999).
   const categories: LhdnCategory[] = [];
   for (const tc of taxCats) {
     const visual = CATEGORY_VISUALS[tc.code];
     if (!visual) continue;
+    const rawCap = Number(tc.max_relief);
     const totals = usedByCode.get(tc.code) ?? { used: 0, items: 0 };
     categories.push({
       id: tc.code,
       name: visual.displayName ?? tc.name,
       icon: visual.icon,
-      cap: Number(tc.max_relief),
+      cap: rawCap >= LHDN_UNLIMITED_CAP ? 0 : rawCap,
       used: Math.round(totals.used * 100) / 100,
       items: totals.items,
       color: visual.color,
     });
+  }
+
+  // Dynamic insight: find the capped category with the highest fill ratio
+  // that still has headroom, so we can show how close the user is to
+  // maximising that relief.
+  const capped = categories.filter((c) => c.cap > 0);
+  const withHeadroom = capped
+    .filter((c) => c.used < c.cap)
+    .sort((a, b) => b.used / b.cap - a.used / a.cap);
+
+  let insightCopy: string;
+  let insightHighlightRm: number;
+
+  if (withHeadroom.length > 0) {
+    const closest = withHeadroom[0];
+    const remaining = Math.round((closest.cap - closest.used) * 100) / 100;
+    insightHighlightRm = remaining;
+    insightCopy = `left to fulfil your ${closest.name} relief`;
+  } else if (capped.length > 0) {
+    // All capped categories are maxed out.
+    const count = capped.filter((c) => c.used >= c.cap).length;
+    insightHighlightRm = capped.reduce((s, c) => s + c.cap, 0);
+    insightCopy = `Great job! You've maxed out ${count} relief${count > 1 ? 's' : ''}`;
+  } else {
+    // No capped categories with any activity — show total available headroom.
+    insightHighlightRm = capped.reduce((s, c) => s + c.cap, 0);
+    insightCopy = `available in tax relief — start adding receipts`;
   }
 
   // Recent: latest 5 receipts (already sorted by caller). Round to 2dp.
@@ -160,8 +346,8 @@ export function shapeLhdn(
 
   return {
     taxYear: `YA ${taxCats[0]?.tax_year ?? new Date().getFullYear()}`,
-    insightCopy: lhdnMock.insightCopy,
-    insightHighlightRm: lhdnMock.insightHighlightRm,
+    insightCopy,
+    insightHighlightRm,
     categories,
     recent,
   };
@@ -207,4 +393,29 @@ export async function fetchLhdn(userId: string, taxYear = DEFAULT_TAX_YEAR): Pro
   }
 
   return shapeLhdn(taxCats, receipts);
+}
+
+/**
+ * Fetch all receipts for a given tax year that map to `code`, client-side
+ * filtered via categoryToCode. Returns them sorted newest-first.
+ *
+ * Client-side filter is necessary because receipts.category is free-text (not
+ * a FK), so the DB can't index on a derived code value.
+ */
+export async function fetchCategoryReceipts(
+  userId: string,
+  taxYear: number,
+  code: string,
+): Promise<ReceiptRow[]> {
+  const { data, error } = await supabase
+    .from('receipts')
+    .select('id, user_id, merchant_name, receipt_date, total_amount, category, tax_year, created_at')
+    .eq('user_id', userId)
+    .eq('tax_year', taxYear)
+    .order('receipt_date', { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return ((data ?? []) as ReceiptRow[]).filter(
+    (r) => categoryToCode(r.category) === code,
+  );
 }

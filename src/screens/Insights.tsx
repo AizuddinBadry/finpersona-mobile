@@ -1,47 +1,58 @@
 /**
- * Insights — Claimable | All spend tab control on /insights.
+ * Insights — Tax | All spend tab control on /insights.
  *
- * Default tab is Claimable: leads with remaining headroom across active
- * LHDN reliefs, a UtilizationDonut sized by per-category cap (claimed
- * solid, headroom faded), and tappable per-category rows that drill
- * into Activity filtered by category. The synthetic Other claimable
- * trailer (cap === 0) appears in the row list but not in the donut.
+ * Tax tab: embeds LhdnContent (same component as the standalone /lhdn screen)
+ * showing all LHDN tax-relief categories, each collapsible with receipts + search.
  *
- * All spend tab keeps the original visual: dual-curve line chart card,
- * By-category bars (Details link now wired to /activity), and the AI
- * forecast strip. The Week/Month/Year period switcher in the header
- * remains visual-only and is independent of the tab toggle.
+ * All spend tab: dual-curve line chart (real paths from daily cumulative
+ * spend), By-category bars, and a searchable paginated receipts list.
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CatIcon } from '@/components/CatIcon';
 import { Icon } from '@/components/Icon';
 import { SegmentedTabs } from '@/components/SegmentedTabs';
-import { UtilizationDonut } from '@/components/UtilizationDonut';
-import { useClaimableInsights, useInsights } from '@/hooks/useInsights';
 import {
-  claimableInsightsMock,
-  insightsMock,
-  type ClaimableCategory,
-} from '@/mocks/seed';
+  useAllReceiptsPage,
+  useClaimableReceiptsPage,
+  useInsights,
+  RECEIPTS_PAGE_SIZE,
+} from '@/hooks/useInsights';
+import type { ReceiptListItem } from '@/lib/supabase/queries/insights';
+import { categoryToIcon } from '@/lib/supabase/queries/activity';
+import { insightsMock } from '@/mocks/seed';
+import { LhdnContent } from '@/screens/Lhdn';
 
-const PERIODS = ['Week', 'Month', 'Year'] as const;
-type Period = (typeof PERIODS)[number];
 type Tab = 'claimable' | 'all-spend';
 
 const TAB_OPTIONS = [
-  { value: 'claimable', label: 'Claimable' },
+  { value: 'claimable', label: 'Tax' },
   { value: 'all-spend', label: 'All spend' },
 ] as const;
 
-const GRAD_HERO =
-  'linear-gradient(135deg, #6E4CE6 0%, #9B7BF1 60%, #C9BAFB 100%)';
-const GRAD_INSIGHT = 'linear-gradient(135deg, #F5F2FE, #EDE7FB)';
+const CURRENT_CALENDAR_YEAR = new Date().getFullYear();
+// Show years from 2022 up to the current calendar year.
+const SELECTABLE_YEARS = Array.from(
+  { length: CURRENT_CALENDAR_YEAR - 2022 + 1 },
+  (_, i) => CURRENT_CALENDAR_YEAR - i,
+);
+
+const NOW = new Date();
+// First day of the current month — used as the default for All spend.
+const CURRENT_MONTH_START = new Date(NOW.getFullYear(), NOW.getMonth(), 1);
+
+function addMonths(base: Date, delta: number): Date {
+  return new Date(base.getFullYear(), base.getMonth() + delta, 1);
+}
 
 export default function Insights() {
   const navigate = useNavigate();
-  const { data: insightsData = insightsMock } = useInsights();
-  const { data: claimableData = claimableInsightsMock } =
-    useClaimableInsights();
+  const [year, setYear] = useState(CURRENT_CALENDAR_YEAR);
+  const [tab, setTab] = useState<Tab>('claimable');
+  // All spend month — defaults to the current month.
+  const [spendMonth, setSpendMonth] = useState(CURRENT_MONTH_START);
+
+  const { data: insightsData = insightsMock } = useInsights(spendMonth);
   const {
     monthLabel,
     totalRm,
@@ -54,13 +65,18 @@ export default function Insights() {
     areaCurrent,
     areaPrevious,
     categories,
-    forecast,
   } = insightsData;
-  const [period, setPeriod] = useState<Period>('Month');
-  const [tab, setTab] = useState<Tab>('claimable');
+
+  const yearIdx = SELECTABLE_YEARS.indexOf(year);
+  const canGoBack = yearIdx < SELECTABLE_YEARS.length - 1;
+  const canGoForward = yearIdx > 0;
   const deltaIsNegative = deltaPct < 0;
   const deltaColor = deltaIsNegative ? '#1FB573' : '#D63440';
   const deltaSign = deltaIsNegative ? '−' : '+';
+
+  // Month nav helpers for All spend tab.
+  const canGoMonthBack = spendMonth.getTime() > new Date(2022, 0, 1).getTime();
+  const canGoMonthForward = spendMonth.getTime() < CURRENT_MONTH_START.getTime();
 
   return (
     <div className="text-ink" style={{ paddingBottom: 110 }}>
@@ -73,40 +89,71 @@ export default function Insights() {
           >
             Insights
           </h1>
-          <div
-            role="tablist"
-            aria-label="Time range"
-            className="flex items-center"
-            style={{ gap: 6 }}
-          >
-            {PERIODS.map((p) => {
-              const active = p === period;
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setPeriod(p)}
-                  className="font-semibold"
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: 999,
-                    fontSize: 11,
-                    background: active ? '#1A1530' : 'transparent',
-                    color: active ? '#fff' : '#7E7491',
-                    border: 'none',
-                  }}
-                >
-                  {p}
-                </button>
-              );
-            })}
-          </div>
+          {/* Year navigator — Tax tab only */}
+          {tab === 'claimable' && (
+            <div
+              className="flex items-center"
+              style={{
+                gap: 2,
+                background: '#F4F1FB',
+                borderRadius: 999,
+                padding: '3px 4px',
+              }}
+            >
+              <button
+                type="button"
+                aria-label="Previous year"
+                onClick={() => canGoBack && setYear(SELECTABLE_YEARS[yearIdx + 1])}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 26,
+                  height: 26,
+                  borderRadius: 999,
+                  background: 'none',
+                  border: 'none',
+                  cursor: canGoBack ? 'pointer' : 'default',
+                  opacity: canGoBack ? 1 : 0.3,
+                }}
+              >
+                <span style={{ display: 'inline-flex', transform: 'rotate(90deg)' }}>
+                  <Icon name="chevronDown" size={13} color="#5837C9" strokeWidth={2.5} />
+                </span>
+              </button>
+              <span
+                className="font-bold"
+                style={{ fontSize: 13, color: '#1A1530', letterSpacing: -0.3, minWidth: 36, textAlign: 'center' }}
+              >
+                {year}
+              </span>
+              <button
+                type="button"
+                aria-label="Next year"
+                onClick={() => canGoForward && setYear(SELECTABLE_YEARS[yearIdx - 1])}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 26,
+                  height: 26,
+                  borderRadius: 999,
+                  background: 'none',
+                  border: 'none',
+                  cursor: canGoForward ? 'pointer' : 'default',
+                  opacity: canGoForward ? 1 : 0.3,
+                }}
+              >
+                <span style={{ display: 'inline-flex', transform: 'rotate(-90deg)' }}>
+                  <Icon name="chevronDown" size={13} color="#5837C9" strokeWidth={2.5} />
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Claimable | All spend toggle */}
+      {/* Tax | All spend toggle */}
       <div style={{ padding: '0 20px 12px' }}>
         <SegmentedTabs<Tab>
           options={TAB_OPTIONS}
@@ -117,10 +164,7 @@ export default function Insights() {
       </div>
 
       {tab === 'claimable' ? (
-        <ClaimablePane
-          data={claimableData}
-          onRowClick={(code) => navigate(`/activity?category=${code}`)}
-        />
+        <LhdnContent year={year} />
       ) : (
         <AllSpendPane
           monthLabel={monthLabel}
@@ -136,10 +180,11 @@ export default function Insights() {
           areaCurrent={areaCurrent}
           areaPrevious={areaPrevious}
           categories={categories}
-          forecast={forecast}
-          // No ?category= here on purpose: Activity's filter expects LHDN
-          // codes (what categoryToCode returns), not the All-spend bucket
-          // labels (Dining/Transport) used by the by-category bars.
+          spendMonth={spendMonth}
+          canGoMonthBack={canGoMonthBack}
+          canGoMonthForward={canGoMonthForward}
+          onPrevMonth={() => setSpendMonth((m) => addMonths(m, -1))}
+          onNextMonth={() => setSpendMonth((m) => addMonths(m, 1))}
           onDetails={() => navigate('/activity')}
         />
       )}
@@ -147,216 +192,261 @@ export default function Insights() {
   );
 }
 
-// ─── Claimable ──────────────────────────────────────────────────────────────
+// ─── Shared search input ──────────────────────────────────────────────────────
 
-function ClaimablePane({
-  data,
-  onRowClick,
+function SearchInput({
+  value,
+  onChange,
+  placeholder = 'Search receipts…',
 }: {
-  data: typeof claimableInsightsMock;
-  onRowClick: (code: string) => void;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
 }) {
-  const { headroom, totalCap, totalClaimed, categoryCount, categories } = data;
-  const donutSegments = categories
-    .filter((c) => c.cap > 0)
-    .map((c) => ({
-      code: c.code,
-      color: c.color,
-      cap: c.cap,
-      claimed: c.claimed,
-    }));
-  const centerLabel = `RM ${totalClaimed.toLocaleString(
-    'en-MY',
-  )} of RM ${totalCap.toLocaleString('en-MY')}`;
-
   return (
-    <>
-      {/* Headline card */}
-      <div style={{ padding: '0 16px' }}>
-        <div
-          className="bg-surface shadow-card"
-          style={{
-            padding: 18,
-            borderRadius: 22,
-            border: '0.5px solid rgba(91,71,168,0.10)',
-          }}
+    <div
+      className="flex items-center bg-surface"
+      style={{
+        gap: 8,
+        padding: '8px 12px',
+        borderRadius: 12,
+        border: '0.5px solid rgba(91,71,168,0.14)',
+        marginBottom: 10,
+      }}
+    >
+      <Icon name="search" size={15} color="#A89DC1" strokeWidth={2} />
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          flex: 1,
+          background: 'none',
+          border: 'none',
+          outline: 'none',
+          fontSize: 13,
+          color: '#1A1530',
+          fontFamily: 'inherit',
+        }}
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex' }}
         >
-          <div
-            className="text-muted font-semibold"
-            style={{
-              fontSize: 11,
-              letterSpacing: 0.4,
-              textTransform: 'uppercase',
-            }}
-          >
-            REMAINING HEADROOM
-          </div>
-          <div
-            className="flex items-baseline"
-            style={{ gap: 6, marginTop: 4 }}
-          >
-            <span
-              className="text-muted font-semibold"
-              style={{ fontSize: 12 }}
-            >
-              RM
-            </span>
-            <span
-              className="font-bold text-ink"
-              style={{
-                fontSize: 32,
-                letterSpacing: -0.8,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {headroom.toLocaleString('en-MY')}
-            </span>
-          </div>
-          <div
-            className="text-muted"
-            style={{ fontSize: 11, marginTop: 2 }}
-          >
-            headroom across {categoryCount} reliefs
-          </div>
-
-          {/* Donut */}
-          <div
-            className="flex items-center justify-center"
-            style={{ marginTop: 14 }}
-          >
-            <UtilizationDonut
-              segments={donutSegments}
-              centerLabel={centerLabel}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Per-category rows */}
-      <div style={{ padding: '0 16px', marginTop: 12 }}>
-        <div
-          className="bg-surface shadow-card"
-          style={{
-            borderRadius: 16,
-            border: '0.5px solid rgba(91,71,168,0.10)',
-            overflow: 'hidden',
-          }}
-        >
-          {categories.map((c, i) => (
-            <ClaimableRow
-              key={c.code}
-              category={c}
-              isLast={i === categories.length - 1}
-              onClick={() => onRowClick(c.code)}
-            />
-          ))}
-        </div>
-      </div>
-    </>
+          <Icon name="close" size={14} color="#A89DC1" strokeWidth={2.5} />
+        </button>
+      )}
+    </div>
   );
 }
 
-function ClaimableRow({
-  category,
-  isLast,
-  onClick,
-}: {
-  category: ClaimableCategory;
-  isLast: boolean;
-  onClick: () => void;
-}) {
-  const isOther = category.cap === 0;
-  const fillPct = isOther ? 0 : Math.min(category.pct * 100, 100);
-  const trackBg = isOther ? 'rgba(160,160,182,0.20)' : '#E8DFFB';
+// ─── Shared receipt row ──────────────────────────────────────────────────────
 
+function fmtReceiptDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.floor((startOfDay(now) - startOfDay(d)) / 86_400_000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function ReceiptRow({ receipt, isLast }: { receipt: ReceiptListItem; isLast: boolean }) {
+  const navigate = useNavigate();
+  const iconName = categoryToIcon(receipt.category);
   return (
     <button
       type="button"
-      aria-label={`View ${category.name} receipts`}
-      onClick={onClick}
+      onClick={() => navigate(`/receipts/${receipt.id}`)}
       className="flex items-center"
       style={{
         width: '100%',
-        gap: 12,
-        padding: '12px 14px',
-        background: 'transparent',
+        gap: 10,
+        paddingTop: 10,
+        paddingBottom: isLast ? 0 : 10,
+        background: 'none',
         border: 'none',
-        borderBottom: isLast
-          ? 'none'
-          : '0.5px solid rgba(91,71,168,0.08)',
+        borderBottom: isLast ? 'none' : '0.5px solid rgba(91,71,168,0.06)',
         cursor: 'pointer',
         textAlign: 'left',
       }}
     >
-      {/* Icon tile */}
-      <div
-        className="flex items-center justify-center"
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          background: `${category.color}15`,
-          flexShrink: 0,
-        }}
-      >
-        <Icon
-          name={category.icon}
-          size={18}
-          color={category.color}
-          strokeWidth={2}
-        />
-      </div>
-
-      {/* Name + progress */}
+      <CatIcon name={iconName} size={32} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           className="font-semibold text-ink"
           style={{
-            fontSize: 15,
+            fontSize: 13,
             letterSpacing: -0.1,
-            marginBottom: 6,
-          }}
-        >
-          {category.name}
-        </div>
-        <div
-          style={{
-            height: 6,
-            background: trackBg,
-            borderRadius: 3,
+            whiteSpace: 'nowrap',
             overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
-          {!isOther && (
-            <div
-              style={{
-                width: `${fillPct}%`,
-                height: '100%',
-                background: category.color,
-                borderRadius: 3,
-              }}
-            />
-          )}
+          {receipt.merchant_name || '—'}
+        </div>
+        <div className="text-muted font-medium" style={{ fontSize: 11, marginTop: 1 }}>
+          {fmtReceiptDate(receipt.receipt_date)}
+          {receipt.category ? ` · ${receipt.category}` : ''}
         </div>
       </div>
-
-      {/* Right amount */}
       <div
         className="font-bold text-ink"
         style={{
-          fontSize: 12,
+          fontSize: 13,
           fontVariantNumeric: 'tabular-nums',
           letterSpacing: -0.2,
           flexShrink: 0,
-          textAlign: 'right',
         }}
       >
-        RM {category.claimed.toLocaleString('en-MY')} /{' '}
-        {isOther
-          ? '—'
-          : `RM ${category.cap.toLocaleString('en-MY')}`}
+        RM {Number(receipt.total_amount).toLocaleString('en-MY', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
       </div>
     </button>
+  );
+}
+
+// ─── Paginated + searchable receipts list (shared by both tabs) ───────────────
+
+function PaginationBar({
+  page,
+  totalPages,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  onPageChange: (p: number) => void;
+}) {
+  return (
+    <div
+      className="flex items-center justify-between"
+      style={{
+        padding: '10px 14px',
+        borderTop: '0.5px solid rgba(91,71,168,0.08)',
+      }}
+    >
+      <button
+        type="button"
+        disabled={page === 0}
+        onClick={() => onPageChange(page - 1)}
+        className="flex items-center font-semibold"
+        style={{
+          gap: 4,
+          fontSize: 12,
+          color: page === 0 ? '#C4B8E0' : '#6E4CE6',
+          background: 'none',
+          border: 'none',
+          cursor: page === 0 ? 'default' : 'pointer',
+        }}
+      >
+        <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
+          <Icon name="chevronRight" size={14} color={page === 0 ? '#C4B8E0' : '#6E4CE6'} strokeWidth={2.5} />
+        </span>
+        Prev
+      </button>
+      <span className="text-muted font-medium" style={{ fontSize: 12 }}>
+        {page + 1} / {totalPages}
+      </span>
+      <button
+        type="button"
+        disabled={page >= totalPages - 1}
+        onClick={() => onPageChange(page + 1)}
+        className="flex items-center font-semibold"
+        style={{
+          gap: 4,
+          fontSize: 12,
+          color: page >= totalPages - 1 ? '#C4B8E0' : '#6E4CE6',
+          background: 'none',
+          border: 'none',
+          cursor: page >= totalPages - 1 ? 'default' : 'pointer',
+        }}
+      >
+        Next
+        <Icon name="chevronRight" size={14} color={page >= totalPages - 1 ? '#C4B8E0' : '#6E4CE6'} strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * variant='claimable' — claimable receipts for the current tax year.
+ * variant='all'       — all receipts for the selected month.
+ */
+function ReceiptsList({ variant, month }: { variant: 'claimable' | 'all'; month?: Date }) {
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+
+  function handleSearch(v: string) {
+    setSearch(v);
+    setPage(0);
+  }
+
+  const claimable = useClaimableReceiptsPage(page, search);
+  const all = useAllReceiptsPage(page, search, month);
+  const { data, isLoading } = variant === 'claimable' ? claimable : all;
+
+  const rows = data?.rows ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / RECEIPTS_PAGE_SIZE));
+  const emptyLabel = variant === 'claimable' ? 'No claimable receipts found' : 'No receipts found';
+
+  return (
+    <div style={{ padding: '16px 16px 0' }}>
+      <div
+        className="flex items-center justify-between"
+        style={{ marginBottom: 10 }}
+      >
+        <span className="font-bold text-ink" style={{ fontSize: 14, letterSpacing: -0.2 }}>
+          {variant === 'claimable' ? 'Claimable receipts' : 'All receipts'}
+        </span>
+        <span className="text-muted font-medium" style={{ fontSize: 11 }}>
+          {totalCount} total
+        </span>
+      </div>
+
+      <SearchInput value={search} onChange={handleSearch} />
+
+      <div
+        className="bg-surface shadow-card"
+        style={{
+          borderRadius: 16,
+          border: '0.5px solid rgba(91,71,168,0.10)',
+          overflow: 'hidden',
+        }}
+      >
+        {isLoading ? (
+          <div
+            className="text-muted font-medium"
+            style={{ fontSize: 13, padding: '20px 0', textAlign: 'center' }}
+          >
+            Loading…
+          </div>
+        ) : rows.length === 0 ? (
+          <div
+            className="text-muted font-medium"
+            style={{ fontSize: 13, padding: '20px 0', textAlign: 'center' }}
+          >
+            {search ? `No results for "${search}"` : emptyLabel}
+          </div>
+        ) : (
+          <div style={{ padding: '0 14px' }}>
+            {rows.map((r, i) => (
+              <ReceiptRow key={r.id} receipt={r} isLast={i === rows.length - 1} />
+            ))}
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -376,9 +466,89 @@ type AllSpendProps = {
   areaCurrent: string;
   areaPrevious: string;
   categories: typeof insightsMock.categories;
-  forecast: typeof insightsMock.forecast;
+  spendMonth: Date;
+  canGoMonthBack: boolean;
+  canGoMonthForward: boolean;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
   onDetails: () => void;
 };
+
+function MonthNav({
+  label,
+  canBack,
+  canForward,
+  onBack,
+  onForward,
+}: {
+  label: string;
+  canBack: boolean;
+  canForward: boolean;
+  onBack: () => void;
+  onForward: () => void;
+}) {
+  return (
+    <div
+      className="flex items-center"
+      style={{
+        gap: 2,
+        background: '#F4F1FB',
+        borderRadius: 999,
+        padding: '3px 4px',
+        alignSelf: 'flex-start',
+      }}
+    >
+      <button
+        type="button"
+        aria-label="Previous month"
+        onClick={() => canBack && onBack()}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 26,
+          height: 26,
+          borderRadius: 999,
+          background: 'none',
+          border: 'none',
+          cursor: canBack ? 'pointer' : 'default',
+          opacity: canBack ? 1 : 0.3,
+        }}
+      >
+        <span style={{ display: 'inline-flex', transform: 'rotate(90deg)' }}>
+          <Icon name="chevronDown" size={13} color="#5837C9" strokeWidth={2.5} />
+        </span>
+      </button>
+      <span
+        className="font-bold"
+        style={{ fontSize: 13, color: '#1A1530', letterSpacing: -0.3, minWidth: 72, textAlign: 'center' }}
+      >
+        {label}
+      </span>
+      <button
+        type="button"
+        aria-label="Next month"
+        onClick={() => canForward && onForward()}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 26,
+          height: 26,
+          borderRadius: 999,
+          background: 'none',
+          border: 'none',
+          cursor: canForward ? 'pointer' : 'default',
+          opacity: canForward ? 1 : 0.3,
+        }}
+      >
+        <span style={{ display: 'inline-flex', transform: 'rotate(-90deg)' }}>
+          <Icon name="chevronDown" size={13} color="#5837C9" strokeWidth={2.5} />
+        </span>
+      </button>
+    </div>
+  );
+}
 
 function AllSpendPane({
   monthLabel,
@@ -394,11 +564,27 @@ function AllSpendPane({
   areaCurrent,
   areaPrevious,
   categories,
-  forecast,
+  spendMonth,
+  canGoMonthBack,
+  canGoMonthForward,
+  onPrevMonth,
+  onNextMonth,
   onDetails,
 }: AllSpendProps) {
+  const monthNavLabel = spendMonth.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
   return (
     <>
+      {/* Month navigator */}
+      <div className="flex items-center justify-end" style={{ padding: '0 20px 10px' }}>
+        <MonthNav
+          label={monthNavLabel}
+          canBack={canGoMonthBack}
+          canForward={canGoMonthForward}
+          onBack={onPrevMonth}
+          onForward={onNextMonth}
+        />
+      </div>
+
       {/* Total spent card */}
       <div style={{ padding: '0 16px' }}>
         <div
@@ -419,16 +605,8 @@ function AllSpendPane({
           >
             Total spent · {monthLabel}
           </div>
-          <div
-            className="flex items-baseline"
-            style={{ gap: 6, marginTop: 4 }}
-          >
-            <span
-              className="text-muted font-semibold"
-              style={{ fontSize: 12 }}
-            >
-              RM
-            </span>
+          <div className="flex items-baseline" style={{ gap: 6, marginTop: 4 }}>
+            <span className="text-muted font-semibold" style={{ fontSize: 12 }}>RM</span>
             <span
               className="font-bold text-ink"
               style={{
@@ -441,28 +619,20 @@ function AllSpendPane({
             </span>
             <span
               className="font-bold"
-              style={{
-                fontSize: 12,
-                color: deltaColor,
-                marginLeft: 6,
-              }}
+              style={{ fontSize: 12, color: deltaColor, marginLeft: 6 }}
             >
-              {deltaSign}
-              {Math.abs(deltaPct)}%
+              {deltaSign}{Math.abs(deltaPct)}%
             </span>
           </div>
-          <div
-            className="text-muted"
-            style={{ fontSize: 11, marginTop: 2 }}
-          >
+          <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
             vs {prevLabel} · RM {prevTotalRm.toLocaleString('en-MY')}
           </div>
 
-          {/* Dual-line chart */}
+          {/* Dual-line chart — real paths from buildChartPaths */}
           <svg
             width="100%"
-            height="100"
-            viewBox="0 0 320 100"
+            height="180"
+            viewBox="0 0 320 130"
             style={{ marginTop: 14, display: 'block' }}
             aria-hidden="true"
           >
@@ -476,8 +646,7 @@ function AllSpendPane({
                 <stop offset="1" stopColor="#C9BAFB" stopOpacity="0" />
               </linearGradient>
             </defs>
-            {/* gridlines */}
-            {[20, 50, 80].map((y) => (
+            {[25, 65, 105].map((y) => (
               <line
                 key={y}
                 x1="0"
@@ -499,23 +668,12 @@ function AllSpendPane({
             />
             {/* current month */}
             <path d={areaCurrent} fill="url(#ins1)" />
-            <path
-              d={pathCurrent}
-              fill="none"
-              stroke="#6E4CE6"
-              strokeWidth="2.5"
-            />
-            <circle cx="320" cy="36" r="4" fill="#6E4CE6" />
-            <circle cx="320" cy="36" r="7" fill="#6E4CE6" fillOpacity="0.2" />
+            <path d={pathCurrent} fill="none" stroke="#6E4CE6" strokeWidth="2.5" />
           </svg>
 
           <div
             className="flex items-center justify-between font-semibold"
-            style={{
-              marginTop: 6,
-              fontSize: 9,
-              color: '#A89DC1',
-            }}
+            style={{ marginTop: 6, fontSize: 9, color: '#A89DC1' }}
           >
             {axis.map((a) => (
               <span key={a}>{a}</span>
@@ -526,25 +684,11 @@ function AllSpendPane({
             style={{ gap: 14, marginTop: 12, fontSize: 11 }}
           >
             <span className="flex items-center" style={{ gap: 6 }}>
-              <span
-                aria-hidden
-                style={{
-                  width: 10,
-                  height: 2,
-                  background: '#6E4CE6',
-                }}
-              />
+              <span aria-hidden style={{ width: 10, height: 2, background: '#6E4CE6' }} />
               {monthLabel}
             </span>
             <span className="flex items-center" style={{ gap: 6 }}>
-              <span
-                aria-hidden
-                style={{
-                  width: 10,
-                  height: 2,
-                  background: '#C9BAFB',
-                }}
-              />
+              <span aria-hidden style={{ width: 10, height: 2, background: '#C9BAFB' }} />
               {prevLabel}
             </span>
           </div>
@@ -556,21 +700,14 @@ function AllSpendPane({
         className="flex items-center justify-between"
         style={{ marginTop: 16, padding: '0 20px' }}
       >
-        <span
-          className="font-bold text-ink"
-          style={{ fontSize: 14, letterSpacing: -0.2 }}
-        >
+        <span className="font-bold text-ink" style={{ fontSize: 14, letterSpacing: -0.2 }}>
           By category
         </span>
         <button
           type="button"
           onClick={onDetails}
           className="font-semibold text-purple"
-          style={{
-            fontSize: 12,
-            background: 'none',
-            border: 'none',
-          }}
+          style={{ fontSize: 12, background: 'none', border: 'none' }}
         >
           Details
         </button>
@@ -588,19 +725,11 @@ function AllSpendPane({
             <div
               key={c.id}
               className="flex items-center"
-              style={{
-                gap: 10,
-                marginBottom: i < categories.length - 1 ? 12 : 0,
-              }}
+              style={{ gap: 10, marginBottom: i < categories.length - 1 ? 12 : 0 }}
             >
               <span
                 className="font-semibold"
-                style={{
-                  width: 78,
-                  fontSize: 12,
-                  color: '#39314F',
-                  letterSpacing: -0.1,
-                }}
+                style={{ width: 78, fontSize: 12, color: '#39314F', letterSpacing: -0.1 }}
               >
                 {c.label}
               </span>
@@ -639,58 +768,13 @@ function AllSpendPane({
         </div>
       </div>
 
-      {/* AI forecast strip */}
-      <div style={{ padding: '14px 16px 0' }}>
-        <div
-          className="flex items-start"
-          style={{
-            padding: '14px 16px',
-            borderRadius: 18,
-            background: GRAD_INSIGHT,
-            border: '0.5px solid rgba(91,71,168,0.10)',
-            gap: 12,
-          }}
-        >
-          <div
-            className="flex items-center justify-center shadow-purpleGlow"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 10,
-              background: GRAD_HERO,
-              flexShrink: 0,
-            }}
-          >
-            <Icon name="sparkle" size={16} color="#fff" strokeWidth={2.2} />
-          </div>
-          <div>
-            <div
-              className="font-bold"
-              style={{
-                fontSize: 10,
-                color: '#6E4CE6',
-                letterSpacing: 0.5,
-                marginBottom: 4,
-              }}
-            >
-              FORECAST · {forecast.period.toUpperCase()}
-            </div>
-            <div
-              className="text-ink font-medium"
-              style={{
-                fontSize: 13,
-                lineHeight: 1.45,
-                letterSpacing: -0.1,
-              }}
-            >
-              At current pace, {forecast.period} trends to{' '}
-              <strong>RM {forecast.pace.toLocaleString('en-MY')}</strong>.
-              Capping weekend dining keeps you under{' '}
-              <strong>RM {forecast.capped.toLocaleString('en-MY')}</strong>.
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* All receipts (selected month, all categories) — key resets page/search on month change */}
+      <ReceiptsList
+        key={`${spendMonth.getFullYear()}-${spendMonth.getMonth()}`}
+        variant="all"
+        month={spendMonth}
+      />
     </>
   );
 }
+

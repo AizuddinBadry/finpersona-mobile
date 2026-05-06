@@ -41,7 +41,7 @@ export default function BottomNav({ dark = false }: { dark?: boolean }) {
   return (
     <div
       style={{
-        position: 'absolute',
+        position: 'fixed',
         bottom: 18,
         left: 16,
         right: 16,

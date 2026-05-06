@@ -60,17 +60,17 @@ describe('Activity', () => {
     }
   });
 
-  it('toggles active state when LHDN chip is tapped', async () => {
+  it('toggles active state when Claimable chip is tapped', async () => {
     renderActivity();
     const all = screen.getByRole('button', { name: 'All' });
-    const lhdn = screen.getByRole('button', { name: /^LHDN$/ });
+    const claimable = screen.getByRole('button', { name: /^Claimable$/ });
 
     expect(all).toHaveAttribute('aria-pressed', 'true');
-    expect(lhdn).toHaveAttribute('aria-pressed', 'false');
+    expect(claimable).toHaveAttribute('aria-pressed', 'false');
 
-    await userEvent.click(lhdn);
+    await userEvent.click(claimable);
 
-    expect(lhdn).toHaveAttribute('aria-pressed', 'true');
+    expect(claimable).toHaveAttribute('aria-pressed', 'true');
     expect(all).toHaveAttribute('aria-pressed', 'false');
   });
 

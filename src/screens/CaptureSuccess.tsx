@@ -25,6 +25,7 @@
 import { useEffect } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
+import { getFinSplitConfig } from '@/lib/finsplit-storage';
 
 const GRAD_BACKDROP =
   'radial-gradient(120% 80% at 50% -10%, #2A1854 0%, #0A0418 60%)';
@@ -37,6 +38,7 @@ type SuccessState = {
   amount?: number;
   sourceName?: string;
   receiptId?: string;
+  merchantName?: string;
 };
 
 export default function CaptureSuccess() {
@@ -61,7 +63,8 @@ export default function CaptureSuccess() {
     return <Navigate to="/" replace />;
   }
 
-  const { amount, sourceName, receiptId } = state;
+  const { amount, sourceName, receiptId, merchantName } = state;
+  const hasSplitProfile = !!getFinSplitConfig()?.setupCompleted;
 
   return (
     <div
@@ -138,15 +141,50 @@ export default function CaptureSuccess() {
         <button
           type="button"
           onClick={() => {
-            if (receiptId) navigate(`/receipts/${receiptId}`);
+            navigate('/finsplit', {
+              state: {
+                prefillAmount: amount,
+                prefillNote: merchantName ?? '',
+              },
+            });
           }}
-          disabled={!receiptId}
-          className="font-bold text-white shadow-purpleGlow"
+          className="font-bold text-white"
           style={{
             width: '100%',
             padding: '14px 0',
             borderRadius: 14,
-            background: GRAD_HERO,
+            background: hasSplitProfile
+              ? 'linear-gradient(135deg, #0EA5A0 0%, #14C4BC 100%)'
+              : GRAD_HERO,
+            fontSize: 14,
+            border: 'none',
+            letterSpacing: -0.1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            boxShadow: hasSplitProfile
+              ? '0 4px 16px rgba(14,165,160,0.35)'
+              : '0 4px 16px rgba(110,76,230,0.35)',
+          }}
+        >
+          <Icon name="splitBill" size={16} color="#fff" strokeWidth={2.2} />
+          Split this bill
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (receiptId) navigate(`/receipts/${receiptId}`);
+          }}
+          disabled={!receiptId}
+          className="font-semibold"
+          style={{
+            width: '100%',
+            padding: '14px 0',
+            borderRadius: 14,
+            background: 'rgba(255,255,255,0.12)',
+            backdropFilter: 'blur(12px)',
+            color: '#fff',
             fontSize: 14,
             border: 'none',
             letterSpacing: -0.1,
@@ -163,9 +201,8 @@ export default function CaptureSuccess() {
             width: '100%',
             padding: '14px 0',
             borderRadius: 14,
-            background: 'rgba(255,255,255,0.12)',
-            backdropFilter: 'blur(12px)',
-            color: '#fff',
+            background: 'rgba(255,255,255,0.07)',
+            color: 'rgba(255,255,255,0.65)',
             fontSize: 14,
             border: 'none',
             letterSpacing: -0.1,

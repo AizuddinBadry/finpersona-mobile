@@ -9,6 +9,7 @@
  * no animation. Each segment renders 1–2 <circle> elements stamped with
  * data-segment / data-arc-len so the arc math is testable from the DOM.
  */
+import React from 'react';
 
 type Segment = {
   code: string;
@@ -118,7 +119,7 @@ export function UtilizationDonut({
           />
         ) : (
           segmentDraws.flatMap(({ seg, offset, claimedLen, headroomLen }) => {
-            const out: JSX.Element[] = [];
+            const out: React.ReactElement[] = [];
             // Solid claimed arc (omitted when claimed === 0).
             if (claimedLen > 0) {
               out.push(

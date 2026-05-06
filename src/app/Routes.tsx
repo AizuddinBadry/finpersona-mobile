@@ -2,7 +2,6 @@ import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import RequireAuth from './RequireAuth';
 import RequireOnboarded from './RequireOnboarded';
-import Placeholder from '@/screens/Placeholder';
 import Home from '@/screens/Home';
 import Activity from '@/screens/Activity';
 import Cards from '@/screens/Cards';
@@ -15,6 +14,8 @@ import Insights from '@/screens/Insights';
 import Rewards from '@/screens/Rewards';
 import ReceiptDetail from '@/screens/ReceiptDetail';
 import Settings from '@/screens/Settings';
+import FinSplit from '@/screens/FinSplit';
+import FinTravel from '@/screens/FinTravel';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SignupScreen from '@/features/auth/SignupScreen';
 import OnboardingScreen from '@/features/auth/OnboardingScreen';
@@ -148,6 +149,22 @@ export default function AppRoutes() {
           element={
             <Tab>
               <Settings />
+            </Tab>
+          }
+        />
+        <Route
+          path="/finsplit"
+          element={
+            <Tab>
+              <FinSplit />
+            </Tab>
+          }
+        />
+        <Route
+          path="/fintravel"
+          element={
+            <Tab>
+              <FinTravel />
             </Tab>
           }
         />

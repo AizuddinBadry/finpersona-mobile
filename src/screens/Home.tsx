@@ -9,6 +9,7 @@
  * <Link> to /rewards, /lhdn, /activity (those are still Placeholder routes
  * until later Phase 2 tasks port them).
  */
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { Avatar } from '@/components/Avatar';
@@ -64,6 +65,8 @@ export default function Home() {
     maximumFractionDigits: 2,
   })}`;
   const tierMultiplierLabel = `${tier.multiplier}x`;
+
+  const [balanceVisible, setBalanceVisible] = useState(true);
 
   // Donut math for the LHDN progress ring.
   const R = 32;
@@ -138,9 +141,9 @@ export default function Home() {
               {formatPoints(user.points)} pts
             </span>
           </Link>
-          <button
-            type="button"
-            aria-label="Notifications"
+          <Link
+            to="/activity"
+            aria-label="Activity"
             className="bg-surface shadow-card flex items-center justify-center"
             style={{
               width: 36,
@@ -149,8 +152,8 @@ export default function Home() {
               border: '0.5px solid rgba(91,71,168,0.10)',
             }}
           >
-            <Icon name="bell" size={18} color="#3A3458" />
-          </button>
+            <Icon name="pulse" size={18} color="#3A3458" />
+          </Link>
         </div>
       </div>
 
@@ -212,7 +215,17 @@ export default function Home() {
             >
               Total balance
             </span>
-            <Icon name="eye" size={16} color="rgba(255,255,255,0.85)" />
+            <button
+              onClick={() => setBalanceVisible(v => !v)}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', lineHeight: 0 }}
+              aria-label={balanceVisible ? 'Hide balance' : 'Show balance'}
+            >
+              <Icon
+                name={balanceVisible ? 'eye' : 'eyeOff'}
+                size={16}
+                color="rgba(255,255,255,0.85)"
+              />
+            </button>
           </div>
           <div
             className="relative"
@@ -224,26 +237,40 @@ export default function Home() {
               <span style={{ fontSize: 16, fontWeight: 600, opacity: 0.85 }}>
                 RM
               </span>
-              <span
-                style={{
-                  fontSize: 38,
-                  fontWeight: 700,
-                  letterSpacing: -1,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {formatRmShort(balance.mainMyr).split('.')[0]}
-              </span>
-              <span
-                style={{
-                  fontSize: 22,
-                  fontWeight: 600,
-                  opacity: 0.7,
-                  letterSpacing: -0.3,
-                }}
-              >
-                .{formatRmShort(balance.mainMyr).split('.')[1]}
-              </span>
+              {balanceVisible ? (
+                <>
+                  <span
+                    style={{
+                      fontSize: 38,
+                      fontWeight: 700,
+                      letterSpacing: -1,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {formatRmShort(balance.mainMyr).split('.')[0]}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 600,
+                      opacity: 0.7,
+                      letterSpacing: -0.3,
+                    }}
+                  >
+                    .{formatRmShort(balance.mainMyr).split('.')[1]}
+                  </span>
+                </>
+              ) : (
+                <span
+                  style={{
+                    fontSize: 38,
+                    fontWeight: 700,
+                    letterSpacing: 4,
+                  }}
+                >
+                  ••••••
+                </span>
+              )}
             </span>
             {/* Machine-readable form (used by tests / screen readers) */}
             <span className="sr-only">{formatRm(balance.mainMyr)}</span>
@@ -264,92 +291,78 @@ export default function Home() {
             <span>this month</span>
           </div>
 
-          {/* Currency pills */}
-          <div className="relative flex" style={{ gap: 8 }}>
-            {balance.currencies.map((b) => (
-              <div
-                key={b.code}
-                style={{
-                  flex: 1,
-                  padding: '10px 12px',
-                  borderRadius: 14,
-                  background: 'rgba(255,255,255,0.13)',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
-                  border: '0.5px solid rgba(255,255,255,0.18)',
-                }}
-              >
-                <div
-                  className="font-medium"
-                  style={{
-                    fontSize: 10,
-                    opacity: 0.8,
-                    marginBottom: 2,
-                    letterSpacing: 0.3,
-                  }}
-                >
-                  {b.flag} {b.code}
-                </div>
-                <div
-                  className="font-bold"
-                  style={{
-                    fontSize: 14,
-                    fontVariantNumeric: 'tabular-nums',
-                    letterSpacing: -0.2,
-                  }}
-                >
-                  {formatRmShort(b.amount)}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
 
-        {/* Quick actions */}
-        <div
-          className="grid"
-          style={{
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: 10,
-            marginTop: 18,
-          }}
-        >
+        {/* Quick actions — 8 features, 2 rows */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 18 }}>
           {[
-            { icon: 'transfer' as const, label: 'Transfer', to: '/sources' },
-            { icon: 'arrowDown' as const, label: 'Top up', to: '/sources' },
-            { icon: 'star' as const, label: 'Rewards', to: '/rewards' },
-            { icon: 'receipt' as const, label: 'LHDN', to: '/lhdn' },
+            { icon: 'bag' as const,      label: 'Marketplace',     featured: true,  to: undefined },
+            { icon: 'splitBill' as const, label: 'FinSplit',    featured: false, to: '/finsplit' },
+            { icon: 'car' as const,      label: 'FinTravel',   featured: false, to: '/fintravel' },
+            { icon: 'star' as const,     label: 'FinRewards',  featured: false, to: '/rewards' },
           ].map((q) => (
-            <Link
+            <div
               key={q.label}
-              to={q.to}
-              className="bg-surface shadow-card flex flex-col items-center"
+              role={q.to ? 'button' : undefined}
+              onClick={q.to ? () => navigate(q.to!) : undefined}
               style={{
+                background: q.featured ? GRAD_HERO : '#FFFFFF',
                 borderRadius: 16,
-                padding: '14px 8px',
-                gap: 8,
-                border: '0.5px solid rgba(91,71,168,0.10)',
-                textDecoration: 'none',
-                color: 'inherit',
+                padding: '12px 8px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: q.featured
+                  ? '0 12px 32px rgba(110,76,230,0.32), 0 4px 12px rgba(110,76,230,0.20)'
+                  : '0 1px 2px rgba(40,20,90,0.04), 0 8px 24px rgba(60,40,140,0.06)',
+                border: q.featured ? 'none' : '0.5px solid rgba(91,71,168,0.10)',
+                position: 'relative',
+                overflow: 'hidden',
+                cursor: q.to ? 'pointer' : 'default',
               }}
             >
-              <div
-                className="bg-mist flex items-center justify-center"
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 12,
-                }}
-              >
-                <Icon name={q.icon} size={18} color="#6E4CE6" strokeWidth={2} />
+              {q.featured && (
+                <div style={{ position: 'absolute', inset: 0, background: GRAD_GLOW, pointerEvents: 'none' }} />
+              )}
+              <div style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                background: q.featured ? 'rgba(255,255,255,0.20)' : '#F5F2FE',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+              }}>
+                <Icon name={q.icon} size={16} color={q.featured ? '#fff' : '#6E4CE6'} strokeWidth={2} />
               </div>
-              <span
-                className="font-semibold text-ink2"
-                style={{ fontSize: 11, letterSpacing: -0.1 }}
-              >
+              <span style={{
+                fontSize: 10.5,
+                fontWeight: 600,
+                letterSpacing: -0.1,
+                position: 'relative',
+                color: q.featured ? '#fff' : '#3A3458',
+              }}>
                 {q.label}
               </span>
-            </Link>
+              {q.featured && (
+                <div style={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  fontSize: 7,
+                  fontWeight: 800,
+                  color: '#5837C9',
+                  background: '#fff',
+                  padding: '2px 4px',
+                  borderRadius: 3,
+                  letterSpacing: 0.3,
+                }}>
+                  NEW
+                </div>
+              )}
+            </div>
           ))}
         </div>
 
@@ -499,6 +512,11 @@ export default function Home() {
               </div>
               <button
                 type="button"
+                onClick={() =>
+                  navigate('/advisor', {
+                    state: { autoMessage: insight.body },
+                  })
+                }
                 className="text-purple flex items-center font-semibold"
                 style={{
                   marginTop: 8,

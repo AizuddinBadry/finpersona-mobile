@@ -1,15 +1,13 @@
 /**
- * Advisor — visual port of Finpersona-mobile-build/screens-6.jsx.
+ * Advisor — AI financial advisor chat at /advisor.
  *
- * AI financial advisor chat. Header with persona avatar (online dot),
- * scripted message thread (text bubbles, embedded sparkline chart bubble,
- * recommendations card list), suggestion chips, and a non-functional
- * composer field. No real LLM yet — messages come from advisorMock.
- *
- * Route /advisor (BottomNav 'Advisor' tab).
+ * AI responses arrive as markdown (** bold **, • bullets, newlines).
+ * renderMarkdown converts that into React nodes so text renders correctly.
+ * The composer is fixed above the BottomNav, so the wrapper needs extra
+ * paddingBottom to prevent chips from hiding behind the composer bar.
  */
-import { Fragment, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { CatIcon } from '@/components/CatIcon';
 import { Sparkline } from '@/components/Sparkline';
@@ -20,12 +18,81 @@ import { advisorMock } from '@/mocks/seed';
 const GRAD_HERO =
   'linear-gradient(135deg, #6E4CE6 0%, #9B7BF1 60%, #C9BAFB 100%)';
 
+// ─── Markdown renderer ────────────────────────────────────────────────────────
+
+/** Converts **bold** spans within a line into React nodes. */
+function inlineBold(text: string): ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) =>
+    part.startsWith('**') && part.endsWith('**') ? (
+      <strong key={i} style={{ fontWeight: 700 }}>
+        {part.slice(2, -2)}
+      </strong>
+    ) : (
+      part
+    ),
+  );
+}
+
+/**
+ * Renders a markdown string (** bold **, • / - bullets, newlines) as React.
+ * Supports the subset the AI advisor actually produces — no tables or headings.
+ */
+function renderMarkdown(text: string): ReactNode {
+  const lines = text.split('\n');
+  const nodes: ReactNode[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const isBullet = /^[•\-*]\s/.test(line);
+    if (isBullet) {
+      // Collect consecutive bullet lines into a list.
+      const items: string[] = [];
+      while (i < lines.length && /^[•\-*]\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^[•\-*]\s/, ''));
+        i++;
+      }
+      nodes.push(
+        <ul key={`ul-${i}`} style={{ margin: '4px 0 4px 0', paddingLeft: 16 }}>
+          {items.map((item, j) => (
+            <li key={j} style={{ marginBottom: 3, lineHeight: 1.45 }}>
+              {inlineBold(item)}
+            </li>
+          ))}
+        </ul>,
+      );
+      continue;
+    }
+    if (line.trim() === '') {
+      nodes.push(<div key={`sp-${i}`} style={{ height: 6 }} />);
+    } else {
+      nodes.push(
+        <div key={`ln-${i}`} style={{ lineHeight: 1.45 }}>
+          {inlineBold(line)}
+        </div>,
+      );
+    }
+    i++;
+  }
+  return <>{nodes}</>;
+}
+
 export default function Advisor() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { data = advisorMock } = useAdvisor();
   const { greeting, chart, messages, recs, suggestions } = data;
   const send = useAdvisorSend();
   const [draft, setDraft] = useState('');
+  const autoFired = useRef(false);
+  const autoMessage = (location.state as { autoMessage?: string } | null)?.autoMessage ?? null;
+
+  useEffect(() => {
+    if (!autoMessage || autoFired.current) return;
+    autoFired.current = true;
+    send.mutate(autoMessage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoMessage]);
 
   const submit = (text: string) => {
     const trimmed = text.trim();
@@ -40,11 +107,16 @@ export default function Advisor() {
   };
 
   return (
-    <div className="text-ink" style={{ paddingBottom: 110 }}>
-      {/* Header */}
+    <div className="text-ink" style={{ paddingTop: 60, paddingBottom: 190 }}>
+      {/* Header — fixed at top */}
       <div
-        className="flex items-center"
+        className="flex items-center bg-surface"
         style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 50,
           padding: '4px 20px 14px',
           gap: 12,
           borderBottom: '0.5px solid rgba(91,71,168,0.10)',
@@ -95,7 +167,7 @@ export default function Advisor() {
               className="font-bold text-ink"
               style={{ fontSize: 15, letterSpacing: -0.2 }}
             >
-              Finpersona
+              FinAdvisor
             </h1>
             <div className="text-muted" style={{ fontSize: 11 }}>
               Your financial analyst · online
@@ -146,10 +218,9 @@ export default function Advisor() {
               borderRadius: '4px 16px 16px 16px',
               border: '0.5px solid rgba(91,71,168,0.10)',
               fontSize: 13.5,
-              lineHeight: 1.4,
             }}
           >
-            {greeting}
+            {renderMarkdown(greeting)}
           </div>
         </div>
 
@@ -231,10 +302,9 @@ export default function Advisor() {
                       borderRadius: '4px 16px 16px 16px',
                       border: '0.5px solid rgba(91,71,168,0.10)',
                       fontSize: 13.5,
-                      lineHeight: 1.4,
                     }}
                   >
-                    {m.text}
+                    {renderMarkdown(m.text)}
                   </div>
                 </div>
                 <div
@@ -323,10 +393,9 @@ export default function Advisor() {
                 borderRadius: '16px 16px 16px 4px',
                 border: '0.5px solid rgba(91,71,168,0.10)',
                 fontSize: 13.5,
-                lineHeight: 1.4,
               }}
             >
-              {m.text}
+              {renderMarkdown(m.text)}
             </div>
           );
         })}
@@ -334,7 +403,7 @@ export default function Advisor() {
         {/* Typing indicator while the assistant turn is in flight. */}
         {send.isPending && (
           <div
-            aria-label="Finpersona is typing"
+            aria-label="FinAdvisor is typing"
             role="status"
             className="bg-surface shadow-card text-muted font-medium"
             style={{
@@ -347,7 +416,7 @@ export default function Advisor() {
               lineHeight: 1.4,
             }}
           >
-            Finpersona is thinking…
+            FinAdvisor is thinking…
           </div>
         )}
 
@@ -445,8 +514,8 @@ export default function Advisor() {
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Ask Finpersona…"
-          aria-label="Message Finpersona"
+          placeholder="Ask FinAdvisor…"
+          aria-label="Message FinAdvisor"
           disabled={send.isPending}
           className="font-medium"
           style={{

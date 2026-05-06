@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
+  computeTier,
   receiptsThisWeek,
+  shapeCatalogItem,
   shapeRecent,
   shapeRewards,
   type EarnTxnRow,
+  type RewardsCatalogRow,
   type UserPointsScalarRow,
 } from '@/lib/supabase/queries/rewards';
 
@@ -20,6 +23,71 @@ function row(partial: Partial<EarnTxnRow> & { id: string; created_at: string }):
     receipts: partial.receipts ?? null,
   };
 }
+
+describe('computeTier', () => {
+  it('maps Bronze for 0 lifetime pts', () => {
+    const t = computeTier(0);
+    expect(t.name).toBe('Bronze');
+    expect(t.next).toBe('Sapphire');
+    expect(t.progressPct).toBe(0);
+    expect(t.pointsToNext).toBe(1000);
+  });
+
+  it('maps Sapphire for 1000–4999 pts with correct progress', () => {
+    const t = computeTier(3000);
+    expect(t.name).toBe('Sapphire');
+    expect(t.progressPct).toBe(Math.round(((3000 - 1000) / 4000) * 100));
+    expect(t.pointsToNext).toBe(2000);
+  });
+
+  it('maps Amethyst for 5000–9999 pts', () => {
+    expect(computeTier(8000).name).toBe('Amethyst');
+    expect(computeTier(5000).name).toBe('Amethyst');
+    expect(computeTier(9999).name).toBe('Amethyst');
+  });
+
+  it('maps Diamond at max tier with progressPct 100 and 0 pointsToNext', () => {
+    const t = computeTier(15000);
+    expect(t.name).toBe('Diamond');
+    expect(t.progressPct).toBe(100);
+    expect(t.pointsToNext).toBe(0);
+  });
+});
+
+describe('shapeCatalogItem', () => {
+  it('maps voucher type to gift icon and purple color with RM sub', () => {
+    const row: RewardsCatalogRow = {
+      id: 'c1',
+      reward_name: 'Shopee RM 50',
+      reward_description: null,
+      points_cost: '4800',
+      reward_type: 'voucher',
+      reward_value: '50',
+      display_order: 1,
+    };
+    const item = shapeCatalogItem(row);
+    expect(item.id).toBe('c1');
+    expect(item.name).toBe('Shopee RM 50');
+    expect(item.pts).toBe(4800);
+    expect(item.icon).toBe('gift');
+    expect(item.sub).toBe('RM 50 value');
+  });
+
+  it('falls back to reward_description as sub when reward_value is null', () => {
+    const row: RewardsCatalogRow = {
+      id: 'c2',
+      reward_name: 'Donation',
+      reward_description: 'Plant a tree',
+      points_cost: '1000',
+      reward_type: 'donation',
+      reward_value: null,
+      display_order: 2,
+    };
+    const item = shapeCatalogItem(row);
+    expect(item.icon).toBe('pulse');
+    expect(item.sub).toBe('Plant a tree');
+  });
+});
 
 describe('receiptsThisWeek', () => {
   const now = new Date('2026-05-01T10:00:00');
@@ -149,14 +217,34 @@ describe('shapeRewards', () => {
     expect(out.recent).toEqual([]);
   });
 
-  it('streak.receiptsThisWeek is computed from txns; tier/multiplier/redeem stay on mock', () => {
+  it('streak.receiptsThisWeek is computed from txns; multiplier stays on mock', () => {
     const out = shapeRewards({ points, earnTxns, now });
     expect(out.streak.receiptsThisWeek).toBe(2);
     expect(out.streak.days).toBe(12); // unchanged from mock
     expect(out.streak.receiptGoal).toBe(7);
-    expect(out.tier.name).toBe('Sapphire');
+    // lifetime_earned = 8000 → Amethyst tier (5000–9999)
+    expect(out.tier.name).toBe('Amethyst');
+    expect(out.tier.next).toBe('Diamond');
     expect(out.multiplier.value).toBe(2);
-    expect(out.redeem.length).toBeGreaterThan(0);
+  });
+
+  it('redeem comes from catalog when provided, falls back to mock when catalog is empty', () => {
+    const catalogRow: RewardsCatalogRow = {
+      id: 'c1',
+      reward_name: 'Grab RM 30',
+      reward_description: 'Grab voucher',
+      points_cost: '3000',
+      reward_type: 'voucher',
+      reward_value: '30',
+      display_order: 1,
+    };
+    const withCatalog = shapeRewards({ points, earnTxns, catalog: [catalogRow], now });
+    expect(withCatalog.redeem).toHaveLength(1);
+    expect(withCatalog.redeem[0]!.name).toBe('Grab RM 30');
+    expect(withCatalog.redeem[0]!.pts).toBe(3000);
+    // falls back to mock when catalog is empty
+    const noCatalog = shapeRewards({ points, earnTxns, catalog: [], now });
+    expect(noCatalog.redeem.length).toBeGreaterThan(0);
   });
 
   it('preserves footnote from mock', () => {

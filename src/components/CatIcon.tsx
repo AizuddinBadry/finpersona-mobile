@@ -16,7 +16,10 @@ export type CatIconName =
   | 'receipt'
   | 'transfer'
   | 'bank'
-  | 'gift';
+  | 'gift'
+  | 'star'
+  | 'pulse'
+  | 'flash';
 
 const PALETTE: Record<CatIconName, { bg: string; fg: string }> = {
   food: { bg: '#FEF0E8', fg: '#D97636' },
@@ -30,6 +33,9 @@ const PALETTE: Record<CatIconName, { bg: string; fg: string }> = {
   transfer: { bg: '#EDEAFB', fg: '#6E4CE6' },
   bank: { bg: '#EDEAFB', fg: '#5837C9' },
   gift: { bg: '#FCE9F4', fg: '#C73E96' },
+  star: { bg: '#FFF3D6', fg: '#E8A020' },
+  pulse: { bg: '#E6F7F0', fg: '#1FB573' },
+  flash: { bg: '#EDE9FB', fg: '#7C3AED' },
 };
 
 type Props = {

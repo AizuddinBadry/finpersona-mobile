@@ -15,8 +15,15 @@ import { activityMock } from '@/mocks/seed';
 import { useActivity } from '@/hooks/useActivity';
 import { categoryToCode } from '@/lib/supabase/queries/lhdn';
 
-const FILTERS = ['All', 'LHDN', 'Food', 'Transport', 'Medical', 'Books'] as const;
+const FILTERS = ['All', 'Claimable', 'Food', 'Transport', 'Medical', 'Books'] as const;
 type Filter = (typeof FILTERS)[number];
+
+const CATEGORY_KEYWORDS: Record<Exclude<Filter, 'All' | 'Claimable'>, string[]> = {
+  Food: ['food', 'dining', 'restaurant', 'cafe', 'coffee', 'makan'],
+  Transport: ['transport', 'fuel', 'petrol', 'grab', 'taxi', 'toll', 'parking'],
+  Medical: ['medical', 'health', 'clinic', 'klinik', 'hospital', 'pharmacy', 'farmasi'],
+  Books: ['book', 'buku', 'lifestyle', 'education', 'stationary'],
+};
 
 function formatRm(amount: number): string {
   const sign = amount < 0 ? '−' : amount > 0 ? '+' : '';
@@ -51,6 +58,7 @@ function categoryLabel(code: string): string {
 
 export default function Activity() {
   const [active, setActive] = useState<Filter>('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryFilter = searchParams.get('category');
@@ -58,10 +66,8 @@ export default function Activity() {
   const { data = activityMock } = useActivity();
   const { summary, transactions, groups } = data;
 
-  // Apply ?category=<code> URL filter. When 'other-claimable', match rows
-  // that are claimable but don't bucket to any known LHDN code. Otherwise,
-  // bucket the row's free-text category through categoryToCode and compare.
-  const filteredTransactions = categoryFilter
+  // 1. Apply ?category=<code> URL filter (from Insights drill-in).
+  const urlFiltered = categoryFilter
     ? transactions.filter((t) => {
         if (categoryFilter === 'other-claimable') {
           return t.lhdn === true && categoryToCode(t.category) === null;
@@ -69,6 +75,28 @@ export default function Activity() {
         return categoryToCode(t.category) === categoryFilter;
       })
     : transactions;
+
+  // 2. Apply chip filter.
+  const chipFiltered =
+    active === 'All'
+      ? urlFiltered
+      : active === 'Claimable'
+        ? urlFiltered.filter((t) => t.lhdn === true)
+        : urlFiltered.filter((t) => {
+            const keywords = CATEGORY_KEYWORDS[active];
+            const cat = t.category.toLowerCase();
+            return keywords.some((kw) => cat.includes(kw));
+          });
+
+  // 3. Apply search query (merchant name or category, case-insensitive).
+  const q = searchQuery.trim().toLowerCase();
+  const filteredTransactions = q
+    ? chipFiltered.filter(
+        (t) =>
+          t.name.toLowerCase().includes(q) ||
+          t.category.toLowerCase().includes(q),
+      )
+    : chipFiltered;
 
   return (
     <div className="text-ink" style={{ paddingBottom: 110 }}>
@@ -118,9 +146,9 @@ export default function Activity() {
         </div>
       </div>
 
-      {/* Search (visual only) */}
+      {/* Search */}
       <div style={{ padding: '0 20px' }}>
-        <div
+        <label
           className="flex items-center bg-surface shadow-card"
           style={{
             gap: 8,
@@ -128,16 +156,35 @@ export default function Activity() {
             borderRadius: 14,
             border: '0.5px solid rgba(91,71,168,0.10)',
           }}
-          aria-hidden
         >
           <Icon name="search" size={16} color="#7A7392" />
-          <span
-            className="font-medium text-faint"
-            style={{ fontSize: 14 }}
-          >
-            Search merchants, categories…
-          </span>
-        </div>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search merchants, categories…"
+            aria-label="Search transactions"
+            className="font-medium text-ink"
+            style={{
+              flex: 1,
+              fontSize: 14,
+              background: 'none',
+              border: 'none',
+              outline: 'none',
+              color: 'inherit',
+            }}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setSearchQuery('')}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              <Icon name="close" size={14} color="#7A7392" />
+            </button>
+          )}
+        </label>
       </div>
 
       {/* Filter chips */}
@@ -198,7 +245,7 @@ export default function Activity() {
             [
               { l: 'In', v: formatRm(summary.in), c: '#1FB573', align: 'left' as const },
               { l: 'Out', v: formatRm(summary.out), c: '#1A1530', align: 'center' as const },
-              { l: 'LHDN', v: formatRm(summary.lhdn), c: '#5837C9', align: 'right' as const },
+              { l: 'Claimable', v: formatRm(summary.lhdn), c: '#5837C9', align: 'right' as const },
             ]
           ).map((s) => (
             <div key={s.l} style={{ flex: 1, textAlign: s.align }}>
@@ -342,7 +389,7 @@ export default function Activity() {
                                 letterSpacing: 0.3,
                               }}
                             >
-                              LHDN
+                              Claimable
                             </span>
                           )}
                         </div>

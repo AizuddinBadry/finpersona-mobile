@@ -8,7 +8,6 @@ import {
   type InsightsReceiptRow,
   type ClaimableInsights,
 } from '@/lib/supabase/queries/insights';
-import { claimableInsightsMock } from '@/mocks/seed';
 
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: vi.fn(),
@@ -196,7 +195,7 @@ describe('useClaimableInsights', () => {
     );
   });
 
-  it('falls back to claimableInsightsMock when the query rejects', async () => {
+  it('surfaces the error when the query rejects (no mock fallback)', async () => {
     const fetchClaimableInsights = vi
       .fn()
       .mockRejectedValue(new Error('boom'));
@@ -206,8 +205,9 @@ describe('useClaimableInsights', () => {
       { wrapper: makeWrapper() },
     );
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toBe(claimableInsightsMock);
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+    expect((result.current.error as Error).message).toBe('boom');
   });
 
   it('is disabled (queryFn not called) when no user is authenticated', async () => {

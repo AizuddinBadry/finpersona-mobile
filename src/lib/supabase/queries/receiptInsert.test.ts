@@ -6,10 +6,10 @@ import type { ExtractedReceiptData } from '@/lib/api/finpersona';
 const singleMock = vi.fn();
 const selectMock = vi.fn(() => ({ single: singleMock }));
 const insertMock = vi.fn(() => ({ select: selectMock }));
-const fromMock = vi.fn(() => ({ insert: insertMock }));
+const fromMock = vi.fn((_table?: string) => ({ insert: insertMock }));
 
 vi.mock('@/lib/supabase/client', () => ({
-  supabase: { from: (...args: unknown[]) => fromMock(...args) },
+  supabase: { from: (...args: unknown[]) => fromMock(...(args as [string])) },
 }));
 
 import {
@@ -184,7 +184,7 @@ describe('insertManualReceipt', () => {
   it('derives tax_year from the receipt_date year', async () => {
     singleMock.mockResolvedValue({ data: { id: 'm2' }, error: null });
     await insertManualReceipt({ ...manualArgs, receiptDate: '2024-06-01' });
-    const inserted = insertMock.mock.calls[0]![0] as { tax_year: number };
+    const inserted = (insertMock.mock.calls[0] as unknown[])[0] as { tax_year: number };
     expect(inserted.tax_year).toBe(2024);
   });
 

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Capacitor } from '@capacitor/core';
 import StatusBar from './StatusBar';
 import BottomNav from './BottomNav';
 
@@ -21,7 +22,7 @@ export default function AppShell({
 }: Props) {
   return (
     <div className="relative min-h-screen bg-bg">
-      <StatusBar dark={dark} />
+      {!Capacitor.isNativePlatform() && <StatusBar dark={dark} />}
       <div className="relative">{children}</div>
       {!hideNav && <BottomNav dark={dark} />}
     </div>

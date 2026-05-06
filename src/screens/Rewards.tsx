@@ -9,11 +9,15 @@
  *
  * Route /rewards (linked from Home Persona Points strip).
  */
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { CatIcon } from '@/components/CatIcon';
 import { DonutRing } from '@/components/DonutRing';
 import { useRewards } from '@/hooks/useRewards';
+import { useAuth } from '@/hooks/useAuth';
+import { claimReward } from '@/lib/supabase/queries/rewards';
 import { rewardsMock } from '@/mocks/seed';
 
 const GRAD_CARD =
@@ -25,6 +29,10 @@ const GRAD_HERO =
 
 export default function Rewards() {
   const { data = rewardsMock } = useRewards();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
   const {
     balancePts,
     redeemableMyr,
@@ -35,6 +43,20 @@ export default function Rewards() {
     recent,
     footnote,
   } = data;
+
+  async function handleClaim(rewardId: string) {
+    if (!user || claimingId) return;
+    setClaimingId(rewardId);
+    setClaimError(null);
+    try {
+      await claimReward(user.id, rewardId);
+      await queryClient.invalidateQueries({ queryKey: ['rewards', user.id] });
+    } catch (err) {
+      setClaimError(err instanceof Error ? err.message : 'Redemption failed.');
+    } finally {
+      setClaimingId(null);
+    }
+  }
 
   return (
     <div className="text-ink" style={{ paddingBottom: 110 }}>
@@ -56,7 +78,7 @@ export default function Rewards() {
               className="font-bold text-ink"
               style={{ fontSize: 28, letterSpacing: -0.7 }}
             >
-              Rewards
+              FinRewards
             </h1>
           </div>
           <Link
@@ -346,6 +368,21 @@ export default function Rewards() {
             All vouchers
           </button>
         </div>
+        {claimError && (
+          <div
+            className="font-medium"
+            style={{
+              marginBottom: 10,
+              padding: '9px 12px',
+              borderRadius: 10,
+              background: '#FEE2E2',
+              color: '#B91C1C',
+              fontSize: 12,
+            }}
+          >
+            {claimError}
+          </div>
+        )}
         <div
           style={{
             display: 'grid',
@@ -355,6 +392,8 @@ export default function Rewards() {
         >
           {redeem.map((r) => {
             const affordable = balancePts >= r.pts;
+            const isClaiming = claimingId === r.id;
+            const anyBusy = claimingId !== null;
             return (
               <div
                 key={r.id}
@@ -364,7 +403,7 @@ export default function Rewards() {
                   padding: 14,
                   border: '0.5px solid rgba(91,71,168,0.10)',
                   position: 'relative',
-                  opacity: affordable ? 1 : 0.6,
+                  opacity: affordable && !anyBusy ? 1 : 0.6,
                 }}
               >
                 <div
@@ -420,24 +459,28 @@ export default function Rewards() {
                   </div>
                   <button
                     type="button"
-                    disabled={!affordable}
+                    disabled={!affordable || anyBusy}
                     aria-label={
-                      affordable
-                        ? `Redeem ${r.name}`
-                        : `Locked: ${r.name}`
+                      isClaiming
+                        ? 'Redeeming…'
+                        : affordable
+                          ? `Redeem ${r.name}`
+                          : `Locked: ${r.name}`
                     }
+                    onClick={() => handleClaim(r.id)}
                     className="font-bold"
                     style={{
                       padding: '5px 10px',
                       borderRadius: 999,
-                      background: affordable ? GRAD_HERO : '#E8DFFB',
-                      color: affordable ? '#fff' : '#7E7491',
+                      background: affordable && !anyBusy ? GRAD_HERO : '#E8DFFB',
+                      color: affordable && !anyBusy ? '#fff' : '#7E7491',
                       fontSize: 10,
                       letterSpacing: 0.2,
                       border: 'none',
+                      cursor: affordable && !anyBusy ? 'pointer' : 'default',
                     }}
                   >
-                    {affordable ? 'Redeem' : 'Locked'}
+                    {isClaiming ? '…' : affordable ? 'Redeem' : 'Locked'}
                   </button>
                 </div>
               </div>

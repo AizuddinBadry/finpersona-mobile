@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "473832419133",
+    "project_id": "finpersona-45173",
+    "storage_bucket": "finpersona-45173.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:473832419133:android:49ec90d2bd5b7116ad5f54",
+        "android_client_info": {
+          "package_name": "com.aexlora.finpersona"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBo4eQtoqq9PlbIYsrfgIzmBHI-4wr-bcc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

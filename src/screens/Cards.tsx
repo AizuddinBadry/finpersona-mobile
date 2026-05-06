@@ -145,6 +145,7 @@ export default function Cards() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [addSrcF, setAddSrcF] = useState({
     name: '',
     source_type: 'bank',
@@ -155,6 +156,15 @@ export default function Cards() {
   const [transferF, setTransferF] = useState({ fromId: '', toId: '', amount: '' });
   const [addMoneyF, setAddMoneyF] = useState({ sourceId: '', amount: '', description: '' });
   const [commitF, setCommitF] = useState<CommitmentForm>(EMPTY_CF);
+
+  function toggleExpanded(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const primaryCard = cards[0];
 
@@ -926,131 +936,254 @@ export default function Cards() {
         </div>
       </div>
 
-      {/* Card stack — tap to edit */}
-      <div style={{ padding: '0 20px' }}>
-        {cards.map((c, i) => {
-          const isPrimary = i === 0;
-          return (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => openSheet('edit-source', { sourceId: c.id })}
+      {/* Primary card */}
+      {primaryCard && (
+        <div style={{ padding: '0 20px' }}>
+          <button
+            type="button"
+            onClick={() => openSheet('edit-source', { sourceId: primaryCard.id })}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              position: 'relative',
+              overflow: 'hidden',
+              borderRadius: 22,
+              padding: '20px 22px',
+              height: 200,
+              marginBottom: 14,
+              background: primaryCard.gradient,
+              color: '#fff',
+              boxShadow: '0 18px 40px rgba(91,71,168,0.32)',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <div
+              aria-hidden
+              style={{ position: 'absolute', inset: 0, background: GRAD_GLOW, pointerEvents: 'none' }}
+            />
+            <div
+              aria-hidden
               style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                position: 'relative',
-                overflow: 'hidden',
-                borderRadius: 22,
-                padding: '20px 22px',
-                height: isPrimary ? 200 : 88,
-                marginBottom: isPrimary ? 14 : 12,
-                background: c.gradient,
-                color: '#fff',
-                boxShadow: isPrimary
-                  ? '0 18px 40px rgba(91,71,168,0.32)'
-                  : '0 10px 24px rgba(60,40,140,0.14)',
-                border: 'none',
-                cursor: 'pointer',
+                position: 'absolute',
+                right: -30,
+                top: -30,
+                width: 120,
+                height: 120,
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%)',
               }}
-            >
+            />
+            <div className="flex items-center justify-between" style={{ position: 'relative' }}>
+              <div>
+                <div
+                  className="font-semibold"
+                  style={{ fontSize: 11, opacity: 0.8, letterSpacing: 0.5, textTransform: 'uppercase' }}
+                >
+                  {primaryCard.flag} {primaryCard.name}
+                </div>
+                <div
+                  className="font-mono font-semibold"
+                  style={{ fontSize: 13, opacity: 0.65, marginTop: 2, letterSpacing: 0.4 }}
+                >
+                  •• {primaryCard.last4}
+                </div>
+              </div>
               <div
-                aria-hidden
-                style={{ position: 'absolute', inset: 0, background: GRAD_GLOW, pointerEvents: 'none' }}
-              />
-              <div
-                aria-hidden
                 style={{
-                  position: 'absolute',
-                  right: -30,
-                  top: -30,
-                  width: 120,
-                  height: 120,
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%)',
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  background: 'rgba(255,255,255,0.18)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: 0.5,
+                  backdropFilter: 'blur(8px)',
                 }}
-              />
-              <div className="flex items-center justify-between" style={{ position: 'relative' }}>
-                <div>
+              >
+                PRIMARY
+              </div>
+            </div>
+            <div style={{ position: 'relative' }}>
+              <div
+                style={{ fontSize: 11, opacity: 0.75, fontWeight: 500, letterSpacing: 0.3, marginBottom: 4 }}
+              >
+                Available balance
+              </div>
+              <div className="flex items-baseline" style={{ gap: 4 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, opacity: 0.85 }}>RM</span>
+                <span
+                  style={{
+                    fontSize: 32,
+                    fontWeight: 700,
+                    letterSpacing: -0.8,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {primaryCard.amount}
+                </span>
+              </div>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Non-primary cards — horizontal scroll strip */}
+      {cards.length > 1 && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 12,
+            padding: '0 20px 4px',
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          {cards.slice(1).map((c) => {
+            const isExpanded = expandedIds.has(c.id);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => toggleExpanded(c.id)}
+                style={{
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: 20,
+                  flexShrink: 0,
+                  width: isExpanded ? 240 : 148,
+                  height: 140,
+                  background: c.gradient,
+                  color: '#fff',
+                  boxShadow: isExpanded
+                    ? '0 14px 32px rgba(60,40,140,0.22)'
+                    : '0 8px 20px rgba(60,40,140,0.14)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  padding: '16px 18px',
+                  transition: 'width 0.28s cubic-bezier(0.4,0,0.2,1), box-shadow 0.2s ease',
+                }}
+              >
+                <div
+                  aria-hidden
+                  style={{ position: 'absolute', inset: 0, background: GRAD_GLOW, pointerEvents: 'none' }}
+                />
+                <div
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    right: -20,
+                    top: -20,
+                    width: 80,
+                    height: 80,
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%)',
+                  }}
+                />
+                {/* Name + last4 */}
+                <div style={{ position: 'relative' }}>
                   <div
                     className="font-semibold"
-                    style={{ fontSize: 11, opacity: 0.8, letterSpacing: 0.5, textTransform: 'uppercase' }}
+                    style={{
+                      fontSize: 10,
+                      opacity: 0.8,
+                      letterSpacing: 0.5,
+                      textTransform: 'uppercase',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      maxWidth: isExpanded ? 160 : 100,
+                    }}
                   >
                     {c.flag} {c.name}
                   </div>
                   <div
                     className="font-mono font-semibold"
-                    style={{ fontSize: 13, opacity: 0.65, marginTop: 2, letterSpacing: 0.4 }}
+                    style={{ fontSize: 11, opacity: 0.55, marginTop: 2, letterSpacing: 0.4 }}
                   >
                     •• {c.last4}
                   </div>
                 </div>
-                {isPrimary && (
-                  <div
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 999,
-                      background: 'rgba(255,255,255,0.18)',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: 0.5,
-                      backdropFilter: 'blur(8px)',
-                    }}
-                  >
-                    PRIMARY
-                  </div>
-                )}
-              </div>
-              {isPrimary ? (
-                <div style={{ position: 'relative' }}>
-                  <div
-                    style={{ fontSize: 11, opacity: 0.75, fontWeight: 500, letterSpacing: 0.3, marginBottom: 4 }}
-                  >
-                    Available balance
-                  </div>
-                  <div className="flex items-baseline" style={{ gap: 4 }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, opacity: 0.85 }}>RM</span>
-                    <span
-                      style={{
-                        fontSize: 32,
-                        fontWeight: 700,
-                        letterSpacing: -0.8,
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {c.amount}
-                    </span>
-                  </div>
-                </div>
-              ) : (
+                {/* Balance — bottom */}
                 <div
                   style={{
                     position: 'absolute',
-                    right: 22,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    textAlign: 'right',
+                    bottom: 16,
+                    left: 18,
+                    right: 18,
                   }}
                 >
-                  <div style={{ fontSize: 10, opacity: 0.7, fontWeight: 500, letterSpacing: 0.3 }}>
+                  <div style={{ fontSize: 10, opacity: 0.65, fontWeight: 500, letterSpacing: 0.3, marginBottom: 3 }}>
                     Balance
                   </div>
-                  <div
-                    style={{
-                      fontSize: 18,
-                      fontWeight: 700,
-                      fontVariantNumeric: 'tabular-nums',
-                      letterSpacing: -0.3,
-                    }}
-                  >
-                    {c.currency} {c.amount}
-                  </div>
+                  {isExpanded ? (
+                    <div className="flex items-end justify-between">
+                      <div className="flex items-baseline" style={{ gap: 3 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.8 }}>{c.currency}</span>
+                        <span
+                          style={{
+                            fontSize: 22,
+                            fontWeight: 700,
+                            letterSpacing: -0.5,
+                            fontVariantNumeric: 'tabular-nums',
+                            lineHeight: 1,
+                          }}
+                        >
+                          {c.amount}
+                        </span>
+                      </div>
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openSheet('edit-source', { sourceId: c.id });
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            openSheet('edit-source', { sourceId: c.id });
+                          }
+                        }}
+                        style={{
+                          padding: '5px 11px',
+                          borderRadius: 999,
+                          background: 'rgba(255,255,255,0.20)',
+                          border: '1px solid rgba(255,255,255,0.25)',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 0.3,
+                          cursor: 'pointer',
+                          backdropFilter: 'blur(8px)',
+                          flexShrink: 0,
+                        }}
+                      >
+                        Edit
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        fontSize: 16,
+                        fontWeight: 700,
+                        fontVariantNumeric: 'tabular-nums',
+                        letterSpacing: -0.3,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {c.amount}
+                    </div>
+                  )}
                 </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Quick actions */}
       <div

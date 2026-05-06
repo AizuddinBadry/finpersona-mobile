@@ -107,7 +107,7 @@ export default function Advisor() {
   };
 
   return (
-    <div className="text-ink" style={{ paddingTop: 60, paddingBottom: 190 }}>
+    <div className="text-ink" style={{ paddingTop: 'calc(60px + env(safe-area-inset-top))', paddingBottom: 190 }}>
       {/* Header — fixed at top */}
       <div
         className="flex items-center bg-surface"
@@ -117,7 +117,10 @@ export default function Advisor() {
           left: 0,
           right: 0,
           zIndex: 50,
-          padding: '4px 20px 14px',
+          paddingTop: 'calc(env(safe-area-inset-top) + 4px)',
+          paddingRight: 20,
+          paddingBottom: 14,
+          paddingLeft: 20,
           gap: 12,
           borderBottom: '0.5px solid rgba(91,71,168,0.10)',
         }}
@@ -345,6 +348,8 @@ export default function Advisor() {
                       <button
                         type="button"
                         aria-label={`Add ${r.title}`}
+                        onClick={() => submit(r.title)}
+                        disabled={send.isPending}
                         className="flex items-center justify-center"
                         style={{
                           width: 26,
@@ -352,6 +357,8 @@ export default function Advisor() {
                           borderRadius: 13,
                           background: '#F5F2FE',
                           border: 'none',
+                          cursor: send.isPending ? 'not-allowed' : 'pointer',
+                          opacity: send.isPending ? 0.6 : 1,
                         }}
                       >
                         <Icon name="plus" size={14} color="#6E4CE6" strokeWidth={2.4} />

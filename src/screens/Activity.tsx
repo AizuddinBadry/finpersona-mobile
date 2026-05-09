@@ -56,9 +56,64 @@ function categoryLabel(code: string): string {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
+/**
+ * Build a CSV string from the filtered transactions. Quotes any value that
+ * contains a comma, quote, or newline — RFC-4180 minimal escaping. Keep
+ * columns aligned to what users actually want to see in Excel/Sheets.
+ */
+function toCsv(rows: ReadonlyArray<{
+  day: string;
+  time: string;
+  name: string;
+  category: string;
+  amount: number;
+  currency?: string;
+  convertedMyr?: number;
+  lhdn?: boolean;
+}>): string {
+  const escape = (v: string | number | boolean) => {
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const header = ['Day', 'Time', 'Merchant', 'Category', 'Amount (MYR)', 'Foreign', 'Claimable'];
+  const lines = [header.join(',')];
+  for (const r of rows) {
+    const myr =
+      r.currency && r.convertedMyr !== undefined ? r.convertedMyr : r.amount;
+    const foreign = r.currency ? `${r.currency} ${r.amount.toFixed(2)}` : '';
+    lines.push(
+      [
+        escape(r.day),
+        escape(r.time),
+        escape(r.name),
+        escape(r.category),
+        escape(myr.toFixed(2)),
+        escape(foreign),
+        escape(r.lhdn ? 'Yes' : 'No'),
+      ].join(','),
+    );
+  }
+  return lines.join('\n');
+}
+
+function downloadCsv(filename: string, csv: string) {
+  // Prepend BOM so Excel auto-detects UTF-8 (handles RM symbol, MYR text, etc.)
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Defer revoke so the click handler has time to start the download.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export default function Activity() {
   const [active, setActive] = useState<Filter>('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryFilter = searchParams.get('category');
@@ -127,22 +182,62 @@ export default function Activity() {
           </h1>
         </div>
         <div className="flex" style={{ gap: 8 }}>
-          {(['filter', 'download'] as const).map((n) => (
-            <button
-              key={n}
-              type="button"
-              aria-label={n === 'filter' ? 'Filter' : 'Download'}
-              className="flex items-center justify-center bg-surface shadow-card"
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                border: '0.5px solid rgba(91,71,168,0.10)',
-              }}
-            >
-              <Icon name={n} size={17} color="#39314F" />
-            </button>
-          ))}
+          <button
+            type="button"
+            aria-label="Filter"
+            onClick={() => setFilterSheetOpen(true)}
+            className="flex items-center justify-center bg-surface shadow-card"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              border: '0.5px solid rgba(91,71,168,0.10)',
+              position: 'relative',
+            }}
+          >
+            <Icon name="filter" size={17} color="#39314F" />
+            {(active !== 'All' || categoryFilter) && (
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  background: '#6E4CE6',
+                  border: '1.5px solid #fff',
+                }}
+              />
+            )}
+          </button>
+          <button
+            type="button"
+            aria-label="Download"
+            onClick={() => {
+              if (filteredTransactions.length === 0) return;
+              const stamp = new Date().toISOString().slice(0, 10);
+              const suffix =
+                categoryFilter ?? (active !== 'All' ? active.toLowerCase() : 'all');
+              downloadCsv(
+                `activity-${suffix}-${stamp}.csv`,
+                toCsv(filteredTransactions),
+              );
+            }}
+            disabled={filteredTransactions.length === 0}
+            className="flex items-center justify-center bg-surface shadow-card"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              border: '0.5px solid rgba(91,71,168,0.10)',
+              opacity: filteredTransactions.length === 0 ? 0.45 : 1,
+              cursor: filteredTransactions.length === 0 ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <Icon name="download" size={17} color="#39314F" />
+          </button>
         </div>
       </div>
 
@@ -431,6 +526,185 @@ export default function Activity() {
           );
         })}
       </div>
+
+      {/* Filter sheet — primary affordance for the top-right Filter icon. The
+          inline chip strip stays as the quick-toggle path; this sheet groups
+          the same filters with larger touch targets plus a Clear-all action
+          and the URL-derived category chip in one place. */}
+      {filterSheetOpen && (
+        <>
+          <div
+            onClick={() => setFilterSheetOpen(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.40)',
+              zIndex: 110,
+            }}
+          />
+          <div
+            role="dialog"
+            aria-label="Filter activity"
+            style={{
+              position: 'fixed',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 120,
+              borderRadius: '20px 20px 0 0',
+              background: '#fff',
+              padding: '20px 20px 32px',
+              maxHeight: '70vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div
+              aria-hidden
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 2,
+                background: '#E0DBF0',
+                margin: '0 auto 16px',
+              }}
+            />
+            <div
+              className="font-bold text-ink"
+              style={{ fontSize: 17, letterSpacing: -0.3, marginBottom: 16 }}
+            >
+              Filter
+            </div>
+
+            {categoryFilter && (
+              <div style={{ marginBottom: 16 }}>
+                <div
+                  className="font-bold text-muted"
+                  style={{
+                    fontSize: 10,
+                    letterSpacing: 0.5,
+                    textTransform: 'uppercase',
+                    marginBottom: 6,
+                  }}
+                >
+                  From insights
+                </div>
+                <div
+                  className="flex items-center justify-between"
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 12,
+                    background: '#F1ECFB',
+                    color: '#5837C9',
+                  }}
+                >
+                  <span className="font-semibold" style={{ fontSize: 13 }}>
+                    {categoryLabel(categoryFilter)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSearchParams({})}
+                    className="font-semibold"
+                    style={{
+                      background: '#fff',
+                      border: 'none',
+                      borderRadius: 999,
+                      padding: '6px 12px',
+                      fontSize: 11,
+                      color: '#5837C9',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div
+              className="font-bold text-muted"
+              style={{
+                fontSize: 10,
+                letterSpacing: 0.5,
+                textTransform: 'uppercase',
+                marginBottom: 8,
+              }}
+            >
+              Category
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {FILTERS.map((f) => {
+                const isActive = active === f;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setActive(f)}
+                    className="font-semibold"
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: 999,
+                      fontSize: 13,
+                      background: isActive ? '#1A1530' : '#F8F7FC',
+                      color: isActive ? '#FFFFFF' : '#39314F',
+                      border: isActive
+                        ? 'none'
+                        : '0.5px solid rgba(91,71,168,0.16)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex" style={{ gap: 10, marginTop: 22 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setActive('All');
+                  setSearchParams({});
+                }}
+                disabled={active === 'All' && !categoryFilter}
+                className="font-semibold"
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: 12,
+                  background: '#F0EEF8',
+                  color: '#7A7392',
+                  border: 'none',
+                  fontSize: 13,
+                  cursor:
+                    active === 'All' && !categoryFilter ? 'not-allowed' : 'pointer',
+                  opacity: active === 'All' && !categoryFilter ? 0.5 : 1,
+                }}
+              >
+                Clear all
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterSheetOpen(false)}
+                className="font-semibold"
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: 12,
+                  background:
+                    'linear-gradient(135deg, #6E4CE6 0%, #9B7BF1 60%, #C9BAFB 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

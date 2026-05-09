@@ -26,8 +26,8 @@ import { LhdnContent } from '@/screens/Lhdn';
 type Tab = 'claimable' | 'all-spend';
 
 const TAB_OPTIONS = [
-  { value: 'claimable', label: 'Tax' },
   { value: 'all-spend', label: 'All spend' },
+  { value: 'claimable', label: 'Tax' },
 ] as const;
 
 const CURRENT_CALENDAR_YEAR = new Date().getFullYear();
@@ -48,7 +48,7 @@ function addMonths(base: Date, delta: number): Date {
 export default function Insights() {
   const navigate = useNavigate();
   const [year, setYear] = useState(CURRENT_CALENDAR_YEAR);
-  const [tab, setTab] = useState<Tab>('claimable');
+  const [tab, setTab] = useState<Tab>('all-spend');
   // All spend month — defaults to the current month.
   const [spendMonth, setSpendMonth] = useState(CURRENT_MONTH_START);
 

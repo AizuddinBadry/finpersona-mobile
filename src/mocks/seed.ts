@@ -324,6 +324,13 @@ export type Commitment = {
   source_id: string | null;
   source_name: string | null;
   notes: string | null;
+  /**
+   * YYYY-MM (e.g. '2026-05') the user last marked this commitment paid for,
+   * or null if never marked. Compared against the current calendar month to
+   * derive "paid this month" — null or a stale period means the pill renders
+   * unchecked. Resets implicitly each month: no backend cron required.
+   */
+  last_paid_period: string | null;
 };
 
 export type CardsMock = {
@@ -406,6 +413,7 @@ export const commitmentsMock: Commitment[] = [
     source_id: null,
     source_name: 'Maybank Visa',
     notes: null,
+    last_paid_period: null,
   },
   {
     id: 'cm2',
@@ -418,6 +426,7 @@ export const commitmentsMock: Commitment[] = [
     source_id: null,
     source_name: 'CIMB Debit',
     notes: null,
+    last_paid_period: null,
   },
   {
     id: 'cm3',
@@ -430,6 +439,7 @@ export const commitmentsMock: Commitment[] = [
     source_id: null,
     source_name: 'Maybank Visa',
     notes: 'Suspended for now',
+    last_paid_period: null,
   },
 ];
 
@@ -542,6 +552,125 @@ export const lhdnMock: LhdnMock = {
       amount: 350.0,
       icon: 'receipt',
       date: 'Apr 22',
+    },
+  ],
+};
+
+/**
+ * Marketplace mock — curated claimable products keyed to LHDN relief
+ * categories. Real category data (cap/used/color) is fetched live via
+ * useLhdn(); this mock only covers static product copy + featured banner
+ * because there's no products table yet.
+ *
+ * Each product's `categoryId` matches an `LhdnCategory.id` so the screen
+ * can join product → live category color/name. Products without a
+ * matching live category fall back to a generic purple chip.
+ */
+export type MarketplaceProduct = {
+  id: string;
+  name: string;
+  sub: string;
+  price: number;
+  was?: number;
+  /** appended after price (e.g. '/month'). */
+  priceSuffix?: string;
+  /** LhdnCategory.id this product claims against. */
+  categoryId: string;
+  /** Hint for the placeholder image — we render an Icon, not a real image. */
+  iconName: 'book' | 'pulse' | 'sparkle' | 'medical' | 'shield' | 'flash' | 'star';
+  /** Linear-gradient string for the image tile background. */
+  tint: string;
+  hot?: boolean;
+};
+
+export type MarketplaceFeatured = {
+  badge: string;
+  title: string;
+  subtitle: string;
+  cta: string;
+  /** Linear-gradient string for the banner. */
+  gradient: string;
+  /** Solid colour to pair with `gradient` for the CTA pill text. */
+  accent: string;
+  /** LhdnCategory.id this banner promotes — used to compute "RM X left". */
+  categoryId: string;
+};
+
+export type MarketplaceMock = {
+  cartCount: number;
+  featured: MarketplaceFeatured;
+  products: MarketplaceProduct[];
+};
+
+export const marketplaceMock: MarketplaceMock = {
+  cartCount: 2,
+  featured: {
+    badge: 'ENDS TODAY',
+    title: 'Sports relief — gear that maxes your cap',
+    subtitle: 'Curated picks that fit your remaining sports headroom. Receipts auto-filed.',
+    cta: 'Shop sports',
+    gradient: 'linear-gradient(135deg, #1FB573 0%, #2DD49C 100%)',
+    accent: '#1FB573',
+    categoryId: 'sports',
+  },
+  products: [
+    {
+      id: 'p1',
+      name: 'Atomic Habits',
+      sub: 'James Clear · Hardcover',
+      price: 58.9,
+      was: 72.0,
+      categoryId: 'lifestyle',
+      iconName: 'book',
+      tint: 'linear-gradient(135deg,#FFE5D2 0%,#FFC7E0 100%)',
+    },
+    {
+      id: 'p2',
+      name: 'Decathlon Domyos Mat',
+      sub: 'Yoga · 6mm · Lavender',
+      price: 89.0,
+      categoryId: 'sports',
+      iconName: 'pulse',
+      tint: 'linear-gradient(135deg,#D4F5E3 0%,#A8E5C4 100%)',
+      hot: true,
+    },
+    {
+      id: 'p3',
+      name: 'Coursera · Data Science',
+      sub: '6-month subscription',
+      price: 248.0,
+      categoryId: 'skills',
+      iconName: 'sparkle',
+      tint: 'linear-gradient(135deg,#FFE9C2 0%,#FFD089 100%)',
+    },
+    {
+      id: 'p4',
+      name: 'Omron BP Monitor',
+      sub: 'HEM-7156T · arm cuff',
+      price: 312.0,
+      categoryId: 'medical',
+      iconName: 'medical',
+      tint: 'linear-gradient(135deg,#FFE0E2 0%,#FFB8BD 100%)',
+    },
+    {
+      id: 'p5',
+      name: 'Kindle Paperwhite',
+      sub: '11th gen · 16GB',
+      price: 599.0,
+      was: 649.0,
+      categoryId: 'lifestyle',
+      iconName: 'book',
+      tint: 'linear-gradient(135deg,#E5E8FB 0%,#B8C0F5 100%)',
+    },
+    {
+      id: 'p6',
+      name: 'SSPN-i Plus',
+      sub: 'Education savings · auto',
+      price: 100.0,
+      priceSuffix: '/month',
+      categoryId: 'sspn',
+      iconName: 'shield',
+      tint: 'linear-gradient(135deg,#D2EAFB 0%,#9BCBE8 100%)',
     },
   ],
 };

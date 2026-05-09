@@ -296,7 +296,7 @@ export default function Home() {
         {/* Quick actions — 8 features, 2 rows */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 18 }}>
           {[
-            { icon: 'bag' as const,      label: 'Marketplace',     featured: true,  to: undefined },
+            { icon: 'bag' as const,      label: 'Marketplace',     featured: true,  to: '/marketplace' },
             { icon: 'splitBill' as const, label: 'FinSplit',    featured: false, to: '/finsplit' },
             { icon: 'car' as const,      label: 'FinTravel',   featured: false, to: '/fintravel' },
             { icon: 'star' as const,     label: 'FinRewards',  featured: false, to: '/rewards' },

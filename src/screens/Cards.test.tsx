@@ -91,4 +91,25 @@ describe('Cards', () => {
       screen.getByRole('heading', { name: 'Sources' }),
     ).toBeInTheDocument();
   });
+
+  it('renders a Paid this month pill on each commitment, all unpressed by default', () => {
+    renderCards();
+    // commitmentsMock has 3 entries, all with last_paid_period = null →
+    // every "Paid" pill should be aria-pressed=false on initial render.
+    const paidPills = screen
+      .getAllByRole('button')
+      .filter((b) => /paid this month/i.test(b.getAttribute('aria-label') ?? ''));
+    expect(paidPills.length).toBe(3);
+    paidPills.forEach((p) =>
+      expect(p.getAttribute('aria-pressed')).toBe('false'),
+    );
+  });
+
+  it('exposes a Receipts quick action that opens the view-receipts sheet', () => {
+    renderCards();
+    // The "Receipts" quick action button (icon + label) is rendered alongside
+    // Transfer / Add Money / New Source.
+    const btn = screen.getByRole('button', { name: /Receipts/i });
+    expect(btn).toBeInTheDocument();
+  });
 });

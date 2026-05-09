@@ -7,10 +7,12 @@
  * the user's anon-key session; RLS enforces ownership.
  */
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { useCards } from '@/hooks/useCards';
 import { useCommitments } from '@/hooks/useCommitments';
+import { useReceiptsBySource } from '@/hooks/useReceiptsBySource';
 import { useAuth } from '@/hooks/useAuth';
 import { cardsMock, commitmentsMock } from '@/mocks/seed';
 import type { Commitment } from '@/mocks/seed';
@@ -27,6 +29,7 @@ import {
   toggleCommitment,
   toggleNotifyCommitment,
   deleteCommitment,
+  setCommitmentPaidPeriod,
 } from '@/lib/supabase/queries/commitments';
 import {
   getPermission,
@@ -80,13 +83,25 @@ function colorFromGradient(grad: string): string {
   return m ? m[0] : COLOR_PRESETS[0]!.hex;
 }
 
+/**
+ * Returns the current calendar month formatted as 'YYYY-MM'. Used as the
+ * marker stored in commitments.last_paid_period — comparing against this on
+ * each render gives us automatic "paid this month" reset on the 1st without
+ * a cron or scheduled function.
+ */
+function currentYearMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 type SheetType =
   | 'add-source'
   | 'edit-source'
   | 'transfer'
   | 'add-money'
   | 'add-commitment'
-  | 'edit-commitment';
+  | 'edit-commitment'
+  | 'view-receipts';
 
 type CommitmentForm = {
   name: string;
@@ -134,16 +149,22 @@ const labelCls: React.CSSProperties = {
 
 export default function Cards() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { data = cardsMock } = useCards();
   const { data: commitments = commitmentsMock } = useCommitments();
   const { cards } = data;
+  const ym = currentYearMonth();
 
   const [sheet, setSheet] = useState<SheetType | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selectedCommitmentId, setSelectedCommitmentId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Banner-style error for actions that happen *outside* a sheet (e.g.
+  // tapping Paid on the commitments list). Inline `err` is only surfaced
+  // inside open sheets, so silent failures there go unnoticed.
+  const [topErr, setTopErr] = useState<string | null>(null);
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [addSrcF, setAddSrcF] = useState({
@@ -156,6 +177,15 @@ export default function Cards() {
   const [transferF, setTransferF] = useState({ fromId: '', toId: '', amount: '' });
   const [addMoneyF, setAddMoneyF] = useState({ sourceId: '', amount: '', description: '' });
   const [commitF, setCommitF] = useState<CommitmentForm>(EMPTY_CF);
+  const [receiptSearch, setReceiptSearch] = useState('');
+
+  // Driven by selectedSourceId; the hook stays disabled until the user opens
+  // the view-receipts sheet (sourceId is set by openSheet) so we don't fire a
+  // query until needed.
+  const receiptsSheetActive = sheet === 'view-receipts';
+  const { data: sheetReceipts = [], isLoading: receiptsLoading } = useReceiptsBySource(
+    receiptsSheetActive ? selectedSourceId : null,
+  );
 
   function toggleExpanded(id: string) {
     setExpandedIds((prev) => {
@@ -190,6 +220,9 @@ export default function Cards() {
     }
     if (type === 'add-commitment') {
       setCommitF(EMPTY_CF);
+    }
+    if (type === 'view-receipts') {
+      setReceiptSearch('');
     }
     if (type === 'edit-commitment') {
       const cm = commitments.find((c) => c.id === cmId);
@@ -321,6 +354,36 @@ export default function Cards() {
       await qc.invalidateQueries({ queryKey: ['commitments', user?.id] });
     } catch {
       // silent — toggle is non-critical
+    }
+  }
+
+  async function handleTogglePaid(id: string, alreadyPaid: boolean) {
+    if (!user?.id) return; // mock-only: don't try to mutate seed data
+    const nextPeriod = alreadyPaid ? null : ym;
+    const key = ['commitments', user.id] as const;
+    // Optimistic update — flip the pill immediately so the user sees the
+    // tap register, then reconcile with the server response. We snapshot
+    // the previous value so we can roll back if the mutation fails.
+    const prev = qc.getQueryData<Commitment[]>(key);
+    qc.setQueryData<Commitment[]>(key, (cur) =>
+      (cur ?? []).map((c) =>
+        c.id === id ? { ...c, last_paid_period: nextPeriod } : c,
+      ),
+    );
+    setTopErr(null);
+    try {
+      await setCommitmentPaidPeriod(id, nextPeriod);
+      await qc.invalidateQueries({ queryKey: key });
+    } catch (e) {
+      // Roll back the optimistic update and surface the error so the user
+      // knows the toggle didn't stick (most likely cause: the
+      // last_paid_period migration hasn't been pushed to this Supabase
+      // project, or the user's session is stale).
+      if (prev) qc.setQueryData<Commitment[]>(key, prev);
+      console.error('Toggle paid failed:', e);
+      const msg = e instanceof Error ? e.message : 'Could not update paid status.';
+      setErr(msg);
+      setTopErr(msg);
     }
   }
 
@@ -907,6 +970,189 @@ export default function Cards() {
       );
     }
 
+    if (sheet === 'view-receipts') {
+      const card = cards.find((c) => c.id === selectedSourceId);
+      const q = receiptSearch.trim().toLowerCase();
+      const filtered = q
+        ? sheetReceipts.filter(
+            (r) =>
+              r.merchant_name.toLowerCase().includes(q) ||
+              (r.category ?? '').toLowerCase().includes(q),
+          )
+        : sheetReceipts;
+      const total = filtered.reduce((sum, r) => sum + r.total_amount, 0);
+      return (
+        <>
+          <div
+            className="font-bold text-ink"
+            style={{ fontSize: 17, letterSpacing: -0.3, marginBottom: 6 }}
+          >
+            Receipts
+          </div>
+          <div className="text-muted" style={{ fontSize: 12, marginBottom: 14 }}>
+            {card ? (
+              <>
+                Paid from <span style={{ color: '#3A3458', fontWeight: 600 }}>{card.name}</span>
+                {' · '}RM {card.amount}
+              </>
+            ) : (
+              'Select a source'
+            )}
+          </div>
+          {/* Summary strip */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 12px',
+              borderRadius: 12,
+              background: '#F8F7FC',
+              border: '1px solid rgba(91,71,168,0.12)',
+              marginBottom: 12,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 11, color: '#7A7392', fontWeight: 600 }}>
+                {filtered.length} {filtered.length === 1 ? 'receipt' : 'receipts'}
+              </div>
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: '#1A1530',
+                  fontVariantNumeric: 'tabular-nums',
+                  marginTop: 2,
+                }}
+              >
+                RM {total.toFixed(2)}
+              </div>
+            </div>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 0.4,
+                color: '#6E4CE6',
+                textTransform: 'uppercase',
+              }}
+            >
+              Total Deducted
+            </div>
+          </div>
+          {/* Search */}
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <input
+              style={{ ...inputCls, paddingLeft: 36 }}
+              placeholder="Search merchant or category…"
+              value={receiptSearch}
+              onChange={(e) => setReceiptSearch(e.target.value)}
+            />
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <Icon name="search" size={14} color="#7A7392" />
+            </div>
+          </div>
+          {/* List */}
+          {receiptsLoading ? (
+            <div
+              className="text-muted"
+              style={{ fontSize: 13, padding: '24px 8px', textAlign: 'center' }}
+            >
+              Loading receipts…
+            </div>
+          ) : filtered.length === 0 ? (
+            <div
+              className="text-muted"
+              style={{ fontSize: 13, padding: '32px 8px', textAlign: 'center', lineHeight: 1.5 }}
+            >
+              {q
+                ? 'No receipts match your search.'
+                : 'No receipts paid from this source yet.'}
+            </div>
+          ) : (
+            <div
+              role="list"
+              aria-label="Receipts"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                paddingBottom: 8,
+              }}
+            >
+              {filtered.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  role="listitem"
+                  onClick={() => {
+                    setSheet(null);
+                    navigate(`/receipts/${r.id}`);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '11px 12px',
+                    borderRadius: 12,
+                    border: '1px solid rgba(91,71,168,0.10)',
+                    background: '#fff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    width: '100%',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      className="font-semibold text-ink"
+                      style={{
+                        fontSize: 13,
+                        letterSpacing: -0.1,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {r.merchant_name}
+                    </div>
+                    <div
+                      className="text-muted"
+                      style={{ fontSize: 11, marginTop: 2 }}
+                    >
+                      {r.receipt_date}
+                      {r.category ? ` · ${r.category}` : ''}
+                      {r.is_claimable ? ' · Claimable' : ''}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: '#1A1530',
+                      fontVariantNumeric: 'tabular-nums',
+                      flexShrink: 0,
+                    }}
+                  >
+                    RM {r.total_amount.toFixed(2)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      );
+    }
+
     return null;
   }
 
@@ -1053,7 +1299,7 @@ export default function Cards() {
                   borderRadius: 20,
                   flexShrink: 0,
                   width: isExpanded ? 240 : 148,
-                  height: 140,
+                  height: isExpanded ? 176 : 140,
                   background: c.gradient,
                   color: '#fff',
                   boxShadow: isExpanded
@@ -1064,6 +1310,9 @@ export default function Cards() {
                   textAlign: 'left',
                   padding: '16px 18px',
                   transition: 'width 0.28s cubic-bezier(0.4,0,0.2,1), box-shadow 0.2s ease',
+                  display: isExpanded ? 'flex' : 'block',
+                  flexDirection: isExpanded ? 'column' : undefined,
+                  justifyContent: isExpanded ? 'space-between' : undefined,
                 }}
               >
                 <div
@@ -1087,44 +1336,57 @@ export default function Cards() {
                   <div
                     className="font-semibold"
                     style={{
-                      fontSize: 10,
-                      opacity: 0.8,
-                      letterSpacing: 0.5,
+                      fontSize: isExpanded ? 13 : 10,
+                      opacity: isExpanded ? 0.95 : 0.8,
+                      letterSpacing: isExpanded ? 0.3 : 0.5,
                       textTransform: 'uppercase',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
-                      maxWidth: isExpanded ? 160 : 100,
+                      maxWidth: isExpanded ? 200 : 100,
                     }}
                   >
                     {c.flag} {c.name}
                   </div>
                   <div
                     className="font-mono font-semibold"
-                    style={{ fontSize: 11, opacity: 0.55, marginTop: 2, letterSpacing: 0.4 }}
+                    style={{
+                      fontSize: 11,
+                      opacity: 0.55,
+                      marginTop: isExpanded ? 4 : 2,
+                      letterSpacing: 0.4,
+                    }}
                   >
                     •• {c.last4}
                   </div>
                 </div>
                 {/* Balance — bottom */}
                 <div
-                  style={{
-                    position: 'absolute',
-                    bottom: 16,
-                    left: 18,
-                    right: 18,
-                  }}
+                  style={
+                    isExpanded
+                      ? { position: 'relative' }
+                      : {
+                          position: 'absolute',
+                          bottom: 16,
+                          left: 18,
+                          right: 18,
+                        }
+                  }
                 >
                   <div style={{ fontSize: 10, opacity: 0.65, fontWeight: 500, letterSpacing: 0.3, marginBottom: 3 }}>
                     Balance
                   </div>
                   {isExpanded ? (
-                    <div className="flex items-end justify-between">
+                    // Stack balance row + pills row vertically: a long
+                    // formatted balance like "1,549.60" plus two pills
+                    // overflows the 240px expanded width when laid out
+                    // side-by-side, clipping the right edge.
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div className="flex items-baseline" style={{ gap: 3 }}>
                         <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.8 }}>{c.currency}</span>
                         <span
                           style={{
-                            fontSize: 22,
+                            fontSize: 20,
                             fontWeight: 700,
                             letterSpacing: -0.5,
                             fontVariantNumeric: 'tabular-nums',
@@ -1135,32 +1397,70 @@ export default function Cards() {
                         </span>
                       </div>
                       <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openSheet('edit-source', { sourceId: c.id });
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.stopPropagation();
-                            openSheet('edit-source', { sourceId: c.id });
-                          }
-                        }}
                         style={{
-                          padding: '5px 11px',
-                          borderRadius: 999,
-                          background: 'rgba(255,255,255,0.20)',
-                          border: '1px solid rgba(255,255,255,0.25)',
-                          fontSize: 10,
-                          fontWeight: 700,
-                          letterSpacing: 0.3,
-                          cursor: 'pointer',
-                          backdropFilter: 'blur(8px)',
+                          display: 'flex',
+                          gap: 6,
+                          alignSelf: 'flex-end',
                           flexShrink: 0,
                         }}
                       >
-                        Edit
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openSheet('view-receipts', { sourceId: c.id });
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`View receipts for ${c.name}`}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.stopPropagation();
+                              openSheet('view-receipts', { sourceId: c.id });
+                            }
+                          }}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 999,
+                            background: 'rgba(255,255,255,0.20)',
+                            border: '1px solid rgba(255,255,255,0.25)',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            letterSpacing: 0.2,
+                            cursor: 'pointer',
+                            backdropFilter: 'blur(8px)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Receipts
+                        </div>
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openSheet('edit-source', { sourceId: c.id });
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.stopPropagation();
+                              openSheet('edit-source', { sourceId: c.id });
+                            }
+                          }}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 999,
+                            background: 'rgba(255,255,255,0.20)',
+                            border: '1px solid rgba(255,255,255,0.25)',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            letterSpacing: 0.2,
+                            cursor: 'pointer',
+                            backdropFilter: 'blur(8px)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Edit
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1213,10 +1513,11 @@ export default function Cards() {
               },
             },
             {
-              id: 'edit',
-              icon: 'settings' as const,
-              label: 'Edit',
-              action: () => primaryCard && openSheet('edit-source', { sourceId: primaryCard.id }),
+              id: 'receipts',
+              icon: 'search' as const,
+              label: 'Receipts',
+              action: () =>
+                primaryCard && openSheet('view-receipts', { sourceId: primaryCard.id }),
             },
           ] as const
         ).map((q) => (
@@ -1237,6 +1538,43 @@ export default function Cards() {
 
       {/* Commitments */}
       <div style={{ padding: '20px 16px 0' }}>
+        {topErr && (
+          <div
+            role="alert"
+            style={{
+              background: '#FDECEE',
+              border: '1px solid #F5B5BC',
+              color: '#8A1F2A',
+              borderRadius: 12,
+              padding: '10px 12px',
+              fontSize: 12,
+              marginBottom: 10,
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 10,
+            }}
+          >
+            <span style={{ lineHeight: 1.4 }}>{topErr}</span>
+            <button
+              type="button"
+              onClick={() => setTopErr(null)}
+              aria-label="Dismiss error"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#8A1F2A',
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: 'pointer',
+                lineHeight: 1,
+                padding: 0,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
         <div className="flex items-center justify-between" style={{ padding: '0 4px', marginBottom: 10 }}>
           <span className="font-bold text-ink" style={{ fontSize: 14, letterSpacing: -0.2 }}>
             Commitments
@@ -1350,6 +1688,42 @@ export default function Cards() {
                       {cm.source_name ? ` · ${cm.source_name}` : ''}
                     </div>
                   </button>
+                  {/* Paid this month pill — last_paid_period stamps the
+                      current YYYY-MM; comparison to ym auto-resets on the 1st */}
+                  {(() => {
+                    const isPaid = cm.last_paid_period === ym;
+                    return (
+                      <button
+                        type="button"
+                        aria-label={`${cm.name} paid this month ${isPaid ? 'yes' : 'no'}`}
+                        aria-pressed={isPaid}
+                        onClick={() => handleTogglePaid(cm.id, isPaid)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '4px 8px',
+                          borderRadius: 999,
+                          background: isPaid ? '#E6F7EF' : '#F0EEF8',
+                          color: isPaid ? '#1FB573' : '#7A7392',
+                          border: `1px solid ${isPaid ? 'rgba(31,181,115,0.30)' : 'rgba(91,71,168,0.16)'}`,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 0.2,
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Icon
+                          name="check"
+                          size={11}
+                          color={isPaid ? '#1FB573' : '#C5C2D6'}
+                          strokeWidth={2.5}
+                        />
+                        Paid
+                      </button>
+                    );
+                  })()}
                   {/* Notification bell */}
                   <button
                     type="button"

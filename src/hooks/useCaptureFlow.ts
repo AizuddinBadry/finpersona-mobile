@@ -185,11 +185,18 @@ export function useCaptureFlow(deps: CaptureFlowDeps = {}) {
       };
       const { id } = await insertReceipt(draft);
       // The new row affects every screen that aggregates from receipts.
+      // The DB trigger (migration 020/021) deducts total_amount from the
+      // chosen payment_sources.balance on insert, so we also need to refresh
+      // the cards cache and the per-source receipts list — without this the
+      // Sources screen keeps showing the pre-deduction balance.
       qc.invalidateQueries({ queryKey: ['home'] });
       qc.invalidateQueries({ queryKey: ['insights'] });
       qc.invalidateQueries({ queryKey: ['insights-claimable'] });
       qc.invalidateQueries({ queryKey: ['lhdn'] });
       qc.invalidateQueries({ queryKey: ['rewards'] });
+      qc.invalidateQueries({ queryKey: ['cards', user?.id] });
+      qc.invalidateQueries({ queryKey: ['payment-sources', user?.id] });
+      qc.invalidateQueries({ queryKey: ['receipts-by-source', user?.id, state.form.sourceId] });
       setState((s) => ({ ...s, phase: 'done', insertedId: id }));
     } catch (err) {
       setState((s) => ({

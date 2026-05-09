@@ -16,6 +16,7 @@ import ReceiptDetail from '@/screens/ReceiptDetail';
 import Settings from '@/screens/Settings';
 import FinSplit from '@/screens/FinSplit';
 import FinTravel from '@/screens/FinTravel';
+import Marketplace from '@/screens/Marketplace';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SignupScreen from '@/features/auth/SignupScreen';
 import OnboardingScreen from '@/features/auth/OnboardingScreen';
@@ -165,6 +166,14 @@ export default function AppRoutes() {
           element={
             <Tab>
               <FinTravel />
+            </Tab>
+          }
+        />
+        <Route
+          path="/marketplace"
+          element={
+            <Tab>
+              <Marketplace />
             </Tab>
           }
         />

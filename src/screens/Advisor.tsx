@@ -85,6 +85,7 @@ export default function Advisor() {
   const send = useAdvisorSend();
   const [draft, setDraft] = useState('');
   const autoFired = useRef(false);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
   const autoMessage = (location.state as { autoMessage?: string } | null)?.autoMessage ?? null;
 
   useEffect(() => {
@@ -93,6 +94,16 @@ export default function Advisor() {
     send.mutate(autoMessage);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoMessage]);
+
+  // Auto-scroll the thread to the bottom on mount, on every new message, and
+  // while the assistant is typing — so the user always sees the latest turn
+  // without having to scroll past the suggestion chips and recommendation list.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages.length, send.isPending]);
+
+  // Cap suggestion chips so the chip strip stays compact even after a long chat.
+  const visibleSuggestions = suggestions.slice(0, 3);
 
   const submit = (text: string) => {
     const trimmed = text.trim();
@@ -432,7 +443,7 @@ export default function Advisor() {
           className="flex items-center"
           style={{ gap: 8, marginTop: 4, flexWrap: 'wrap' }}
         >
-          {suggestions.map((s) => (
+          {visibleSuggestions.map((s) => (
             <button
               key={s}
               type="button"
@@ -454,6 +465,10 @@ export default function Advisor() {
             </button>
           ))}
         </div>
+
+        {/* Bottom sentinel — scrollIntoView target so the thread auto-pins
+            to the latest message on mount and as the conversation grows. */}
+        <div ref={bottomRef} aria-hidden style={{ height: 1 }} />
       </div>
 
       {/* Error banner — shows the last failed send. Manually dismissable so

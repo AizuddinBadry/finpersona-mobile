@@ -23,6 +23,8 @@ export type CommitmentRow = {
   notify_enabled: boolean;
   notes: string | null;
   created_at: string;
+  /** YYYY-MM the user last marked this commitment paid for, or null. */
+  last_paid_period: string | null;
   payment_sources: { name: string } | null;
 };
 
@@ -38,7 +40,25 @@ function shapeCommitment(row: CommitmentRow): Commitment {
     source_id: row.source_id,
     source_name: row.payment_sources?.name ?? null,
     notes: row.notes,
+    last_paid_period: row.last_paid_period,
   };
+}
+
+/**
+ * Stamp the commitment's last_paid_period. Pass the current YYYY-MM to mark
+ * paid for the current calendar month, or null to clear it. Mobile derives
+ * "paid this month" by comparing against currentYearMonth() — letting the
+ * value go stale on month rollover is the intended reset behaviour.
+ */
+export async function setCommitmentPaidPeriod(
+  id: string,
+  period: string | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('commitments')
+    .update({ last_paid_period: period })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 export async function fetchCommitments(userId: string): Promise<Commitment[]> {

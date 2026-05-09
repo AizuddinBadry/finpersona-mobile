@@ -13,7 +13,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { useAuth } from '@/hooks/useAuth';
 import { usePaymentSources } from '@/hooks/usePaymentSources';
@@ -37,6 +37,7 @@ function todayIso(): string {
 export default function CaptureManual() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const qc = useQueryClient();
   const sourcesQuery = usePaymentSources();
 
   const [merchant, setMerchant] = useState('');
@@ -86,6 +87,19 @@ export default function CaptureManual() {
       return res;
     },
     onSuccess: (res) => {
+      // The DB trigger (migration 020/021) deducted total_amount from the
+      // chosen payment_sources.balance on insert — invalidate every cache
+      // that displays a balance or aggregates over receipts so the user sees
+      // the deduction reflected immediately when they leave this screen.
+      qc.invalidateQueries({ queryKey: ['cards', user?.id] });
+      qc.invalidateQueries({ queryKey: ['payment-sources', user?.id] });
+      qc.invalidateQueries({ queryKey: ['receipts-by-source', user?.id, effectiveSourceId] });
+      qc.invalidateQueries({ queryKey: ['home'] });
+      qc.invalidateQueries({ queryKey: ['insights'] });
+      qc.invalidateQueries({ queryKey: ['insights-claimable'] });
+      qc.invalidateQueries({ queryKey: ['lhdn'] });
+      qc.invalidateQueries({ queryKey: ['rewards'] });
+
       const sourceName =
         sourcesQuery.data?.find((s) => s.id === effectiveSourceId)?.name ??
         '';

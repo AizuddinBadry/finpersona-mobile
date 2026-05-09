@@ -57,7 +57,9 @@ export type IconName =
   | 'moon'
   | 'people'
   | 'wallet'
-  | 'package';
+  | 'package'
+  | 'cart'
+  | 'fire';
 
 type Props = {
   name: IconName;
@@ -362,6 +364,18 @@ export function Icon({
         <path d="M12 2l9 4.5V18L12 22 3 17.5V6.5L12 2z" />
         <path d="M12 22V12M3 6.5l9 5.5 9-5.5" />
         <path d="M7.5 4.2l9 4.3" />
+      </g>
+    ),
+    cart: (
+      <g {...stroke}>
+        <path d="M3 4h2l2.4 11.2a2 2 0 002 1.6h7.7a2 2 0 002-1.5L21 8H6" />
+        <circle cx="9" cy="20" r="1.4" />
+        <circle cx="17" cy="20" r="1.4" />
+      </g>
+    ),
+    fire: (
+      <g {...stroke}>
+        <path d="M12 3s4 4 4 8a4 4 0 01-8 0c0-1.5 1-2.5 1-4-2 1-4 3-4 6a7 7 0 0014 0c0-5-7-10-7-10z" />
       </g>
     ),
   };

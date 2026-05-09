@@ -63,26 +63,41 @@ export default function Rewards() {
       {/* Header */}
       <div style={{ padding: '8px 20px 12px' }}>
         <div className="flex items-center justify-between">
-          <div>
-            <div
-              className="font-bold text-purple"
+          <div className="flex items-center" style={{ gap: 10 }}>
+            <Link
+              to="/"
+              aria-label="Back"
+              className="flex items-center justify-center bg-surface shadow-card"
               style={{
-                fontSize: 11,
-                letterSpacing: 0.6,
-                textTransform: 'uppercase',
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                border: '0.5px solid rgba(91,71,168,0.10)',
               }}
             >
-              Persona Points
+              <Icon name="arrowLeft" size={17} color="#39314F" />
+            </Link>
+            <div>
+              <div
+                className="font-bold text-purple"
+                style={{
+                  fontSize: 11,
+                  letterSpacing: 0.6,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Persona Points
+              </div>
+              <h1
+                className="font-bold text-ink"
+                style={{ fontSize: 22, letterSpacing: -0.5 }}
+              >
+                FinRewards
+              </h1>
             </div>
-            <h1
-              className="font-bold text-ink"
-              style={{ fontSize: 28, letterSpacing: -0.7 }}
-            >
-              FinRewards
-            </h1>
           </div>
-          <Link
-            to="/"
+          <button
+            type="button"
             aria-label="Information"
             className="flex items-center justify-center bg-surface shadow-card"
             style={{
@@ -93,7 +108,7 @@ export default function Rewards() {
             }}
           >
             <Icon name="info" size={17} color="#39314F" />
-          </Link>
+          </button>
         </div>
       </div>
 

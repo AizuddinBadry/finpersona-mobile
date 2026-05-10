@@ -26,15 +26,12 @@ type CartAction =
   | { type: 'ADD_SERVICE'; itemId: string }
   | { type: 'SET_QTY'; itemId: string; qty: number }
   | { type: 'REMOVE'; itemId: string }
-  | { type: 'CLEAR' }
-  | { type: 'HYDRATE'; lines: CartLine[] };
+  | { type: 'CLEAR' };
 
 const STORAGE_KEY = 'finpersona.cart.v1';
 
 function reducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
-    case 'HYDRATE':
-      return { lines: action.lines };
     case 'ADD_PRODUCT': {
       const existing = state.lines.find(
         (l) => l.kind === 'product' && l.itemId === action.itemId,
@@ -63,7 +60,11 @@ function reducer(state: CartState, action: CartAction): CartState {
     }
     case 'SET_QTY': {
       if (action.qty <= 0) {
-        return { lines: state.lines.filter((l) => l.itemId !== action.itemId) };
+        return {
+          lines: state.lines.filter(
+            (l) => !(l.kind === 'product' && l.itemId === action.itemId),
+          ),
+        };
       }
       return {
         lines: state.lines.map((l) =>

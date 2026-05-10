@@ -566,22 +566,37 @@ export const lhdnMock: LhdnMock = {
  * can join product → live category color/name. Products without a
  * matching live category fall back to a generic purple chip.
  */
-export type MarketplaceProduct = {
+export type MarketplaceItem = {
   id: string;
   name: string;
   sub: string;
   price: number;
   was?: number;
-  /** appended after price (e.g. '/month'). */
+  /** appended after price (e.g. '/month' for products, '/ consultation' for services). */
   priceSuffix?: string;
-  /** LhdnCategory.id this product claims against. */
+  /** LhdnCategory.id this item claims against. */
   categoryId: string;
   /** Hint for the placeholder image — we render an Icon, not a real image. */
   iconName: 'book' | 'pulse' | 'sparkle' | 'medical' | 'shield' | 'flash' | 'star';
   /** Linear-gradient string for the image tile background. */
   tint: string;
   hot?: boolean;
+  /** Detail-screen description paragraph. */
+  description: string;
+  /**
+   * Discriminator: 'product' is qty-buyable, 'service' is a consultation
+   * booking with no quantity (doctor visit, takaful planning, etc.).
+   */
+  kind: 'product' | 'service';
+  /** Bullet list shown on detail screen for service items. */
+  serviceIncludes?: string[];
 };
+
+/**
+ * @deprecated Prefer MarketplaceItem. Alias kept so older imports compile
+ * while the codebase migrates.
+ */
+export type MarketplaceProduct = MarketplaceItem;
 
 export type MarketplaceFeatured = {
   badge: string;
@@ -623,6 +638,8 @@ export const marketplaceMock: MarketplaceMock = {
       categoryId: 'lifestyle',
       iconName: 'book',
       tint: 'linear-gradient(135deg,#FFE5D2 0%,#FFC7E0 100%)',
+      description: 'A practical framework for building habits that compound — paperback edition.',
+      kind: 'product',
     },
     {
       id: 'p2',
@@ -633,6 +650,8 @@ export const marketplaceMock: MarketplaceMock = {
       iconName: 'pulse',
       tint: 'linear-gradient(135deg,#D4F5E3 0%,#A8E5C4 100%)',
       hot: true,
+      description: 'Lightweight 6mm yoga mat with anti-slip surface, ideal for home practice.',
+      kind: 'product',
     },
     {
       id: 'p3',
@@ -642,6 +661,8 @@ export const marketplaceMock: MarketplaceMock = {
       categoryId: 'skills',
       iconName: 'sparkle',
       tint: 'linear-gradient(135deg,#FFE9C2 0%,#FFD089 100%)',
+      description: '6-month learner subscription with unlimited access to Coursera Plus catalogue.',
+      kind: 'product',
     },
     {
       id: 'p4',
@@ -651,6 +672,8 @@ export const marketplaceMock: MarketplaceMock = {
       categoryId: 'medical',
       iconName: 'medical',
       tint: 'linear-gradient(135deg,#FFE0E2 0%,#FFB8BD 100%)',
+      description: 'Clinically validated upper-arm blood pressure monitor with Bluetooth sync.',
+      kind: 'product',
     },
     {
       id: 'p5',
@@ -661,6 +684,8 @@ export const marketplaceMock: MarketplaceMock = {
       categoryId: 'lifestyle',
       iconName: 'book',
       tint: 'linear-gradient(135deg,#E5E8FB 0%,#B8C0F5 100%)',
+      description: '11th-generation e-reader with 16GB storage, glare-free display, and weeks of battery.',
+      kind: 'product',
     },
     {
       id: 'p6',
@@ -671,6 +696,62 @@ export const marketplaceMock: MarketplaceMock = {
       categoryId: 'sspn',
       iconName: 'shield',
       tint: 'linear-gradient(135deg,#D2EAFB 0%,#9BCBE8 100%)',
+      description: 'Education savings auto-debit with full LHDN relief eligibility on contributions.',
+      kind: 'product',
+    },
+    {
+      id: 's1',
+      name: 'Doctor consultation',
+      sub: 'GP · video call',
+      price: 120,
+      priceSuffix: '/ consultation',
+      categoryId: 'medical',
+      iconName: 'medical',
+      tint: 'linear-gradient(135deg,#FFE0E2 0%,#FFB8BD 100%)',
+      description: 'Licensed GP appointment over secure video call for general health concerns and prescriptions.',
+      kind: 'service',
+      serviceIncludes: [
+        '30-min video consultation',
+        'E-prescription where eligible',
+        'Tax-relief eligibility check',
+        'Follow-up email summary',
+      ],
+    },
+    {
+      id: 's2',
+      name: 'Insurance review',
+      sub: '1-on-1 advisor session',
+      price: 0,
+      priceSuffix: '/ consultation',
+      categoryId: 'insurance',
+      iconName: 'shield',
+      tint: 'linear-gradient(135deg,#E5E8FB 0%,#B8C0F5 100%)',
+      description: 'Free policy review with a licensed advisor — coverage gaps, premium fit, and relief alignment.',
+      kind: 'service',
+      serviceIncludes: [
+        '45-min video consultation',
+        'Coverage gap analysis',
+        'Premium fit vs. relief cap review',
+        'Written recommendations PDF',
+      ],
+    },
+    {
+      id: 's3',
+      name: 'Takaful planning session',
+      sub: 'Shariah-compliant advisor',
+      price: 0,
+      priceSuffix: '/ consultation',
+      categoryId: 'insurance',
+      iconName: 'shield',
+      tint: 'linear-gradient(135deg,#D4F5E3 0%,#A8E5C4 100%)',
+      description: 'Plan your Takaful contributions with a Shariah-compliant advisor and align with your family relief goals.',
+      kind: 'service',
+      serviceIncludes: [
+        '45-min video consultation',
+        'Family takaful structure review',
+        'Tabarru/saving split guidance',
+        'Written summary PDF',
+      ],
     },
   ],
 };

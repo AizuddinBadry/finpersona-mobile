@@ -47,6 +47,7 @@ export default function Marketplace() {
   const { products, featured, cartCount } = marketplaceMock;
 
   const [activeCategoryId, setActiveCategoryId] = useState<string>(ALL_CATEGORY_ID);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Build the pill row from real LHDN categories. Each pill shows the count
   // of marketplace products mapped to that category id.
@@ -67,9 +68,18 @@ export default function Marketplace() {
   }, [lhdn.categories, products]);
 
   const visibleProducts = useMemo(() => {
-    if (activeCategoryId === ALL_CATEGORY_ID) return products;
-    return products.filter((p) => p.categoryId === activeCategoryId);
-  }, [activeCategoryId, products]);
+    const q = searchQuery.trim().toLowerCase();
+    return products.filter((p) => {
+      const inCategory =
+        activeCategoryId === ALL_CATEGORY_ID || p.categoryId === activeCategoryId;
+      if (!inCategory) return false;
+      if (!q) return true;
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.sub.toLowerCase().includes(q)
+      );
+    });
+  }, [activeCategoryId, products, searchQuery]);
 
   // Pick up to 4 categories for the headroom strip — prefer those with the
   // most remaining cap so users see where they have the most to claim.
@@ -201,17 +211,23 @@ export default function Marketplace() {
           }}
         >
           <Icon name="search" size={16} color={tokens.color.faint} />
-          <span
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={`Search ${products.length} claimable items`}
             style={{
-              fontSize: 13,
-              color: tokens.color.faint,
-              fontWeight: 500,
               flex: 1,
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              fontSize: 13,
+              color: tokens.color.ink,
+              fontWeight: 500,
+              padding: 0,
+              minWidth: 0,
             }}
-          >
-            Search {products.length} claimable products
-          </span>
-          <Icon name="filter" size={14} color={tokens.color.muted} />
+          />
         </div>
 
         {/* Relief headroom strip — derived from live LHDN categories */}
@@ -520,7 +536,9 @@ export default function Marketplace() {
               fontWeight: 500,
             }}
           >
-            No products in this category yet.
+            {searchQuery.trim()
+              ? `No items match "${searchQuery.trim()}".`
+              : 'No items in this category yet.'}
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

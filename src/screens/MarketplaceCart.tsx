@@ -138,7 +138,7 @@ export default function MarketplaceCart() {
   };
 
   return (
-    <div style={{ color: tokens.color.ink, paddingBottom: isEmpty ? 24 : 110 }}>
+    <div style={{ color: tokens.color.ink, paddingBottom: isEmpty ? 24 : 170 }}>
       {/* Header */}
       <div
         style={{
@@ -231,19 +231,20 @@ export default function MarketplaceCart() {
         <div
           style={{
             position: 'fixed',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            padding:
-              '12px 16px calc(12px + env(safe-area-inset-bottom)) 16px',
+            left: 16,
+            right: 16,
+            bottom: 102,
+            padding: '12px 16px',
             background: 'rgba(255,255,255,0.92)',
             backdropFilter: 'blur(12px)',
             WebkitBackdropFilter: 'blur(12px)',
-            borderTop: `0.5px solid ${HAIRLINE}`,
+            borderRadius: 20,
+            border: `0.5px solid ${HAIRLINE}`,
+            boxShadow: '0 8px 24px rgba(60,40,140,0.12)',
             display: 'flex',
             alignItems: 'center',
             gap: 12,
-            zIndex: 20,
+            zIndex: 50,
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>

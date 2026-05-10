@@ -22,6 +22,11 @@ const config: CapacitorConfig = {
       style: 'LIGHT',
       backgroundColor: '#FAF8FF',
     },
+    LocalNotifications: {
+      smallestUnit: 'minute',
+      sound: 'default',
+      iconColor: '#6E4CE6',
+    },
   },
 };
 

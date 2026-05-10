@@ -371,17 +371,6 @@ export default function Rewards() {
           >
             Redeem
           </span>
-          <button
-            type="button"
-            className="font-semibold text-purple"
-            style={{
-              fontSize: 12,
-              background: 'none',
-              border: 'none',
-            }}
-          >
-            All vouchers
-          </button>
         </div>
         {claimError && (
           <div

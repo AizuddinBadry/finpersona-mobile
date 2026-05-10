@@ -1,117 +1,97 @@
 /**
- * Web Push notification utilities.
+ * Local notification utilities for commitment reminders.
+ *
+ * Uses @capacitor/local-notifications so notifications are scheduled entirely
+ * on-device — no FCM, no VAPID keys, no backend cron required.
  *
  * Flow:
- *   1. `requestAndSubscribe(userId)` — asks for permission, registers the
- *      service worker, creates a PushManager subscription, and upserts it
- *      into the `push_subscriptions` Supabase table so the backend cron can
- *      send reminders.
- *   2. `unsubscribe(userId)` — cancels the push subscription and removes
- *      the row from Supabase.
- *   3. `getPermission()` — returns the current Notification permission
- *      state ('granted' | 'denied' | 'default' | 'unsupported').
- *
- * The VITE_VAPID_PUBLIC_KEY env var must be the URL-safe-base64 string
- * generated alongside the private key stored in the backend.
+ *   1. `scheduleCommitmentReminder(commitment)` — requests permission (once),
+ *      then schedules a monthly repeating notification at 9 AM one day before
+ *      the commitment's due_day.
+ *   2. `cancelCommitmentReminder(commitmentId)` — cancels the scheduled
+ *      notification for that commitment.
+ *   3. `requestPermission()` — requests notification permission and returns
+ *      whether it was granted.
  */
-import { supabase } from '@/lib/supabase/client';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { Capacitor } from '@capacitor/core';
 
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY ?? '';
-const SW_PATH = '/sw.js';
-
-export type NotificationPermissionState = NotificationPermission | 'unsupported';
-
-export function isNotificationSupported(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    'Notification' in window &&
-    'serviceWorker' in navigator &&
-    'PushManager' in window
-  );
-}
-
-export function getPermission(): NotificationPermissionState {
-  if (!isNotificationSupported()) return 'unsupported';
-  return Notification.permission;
-}
-
-function urlBase64ToUint8Array(base64: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
-  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(b64);
-  const output = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
-  return output;
-}
-
-async function getOrRegisterSW(): Promise<ServiceWorkerRegistration | null> {
-  try {
-    const existing = await navigator.serviceWorker.getRegistration(SW_PATH);
-    if (existing) return existing;
-    return await navigator.serviceWorker.register(SW_PATH, { scope: '/' });
-  } catch {
-    return null;
+/** Deterministic integer ID from a commitment UUID string. */
+function notifId(commitmentId: string): number {
+  let hash = 0;
+  for (let i = 0; i < commitmentId.length; i++) {
+    hash = ((hash << 5) - hash) + commitmentId.charCodeAt(i);
+    hash |= 0;
   }
+  return Math.abs(hash);
+}
+
+/** Returns true if the app is running as a native Capacitor app. */
+function isNative(): boolean {
+  return Capacitor.isNativePlatform();
 }
 
 /**
- * Requests notification permission, subscribes to push, and stores the
- * subscription in Supabase. Returns the final permission state.
+ * Requests notification permission. Returns true if granted.
+ * Safe to call multiple times — resolves immediately if already granted.
  */
-export async function requestAndSubscribe(
-  userId: string,
-): Promise<NotificationPermissionState> {
-  if (!isNotificationSupported()) return 'unsupported';
+export async function requestPermission(): Promise<boolean> {
+  if (!isNative()) return false;
+  const { display } = await LocalNotifications.requestPermissions();
+  return display === 'granted';
+}
 
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') return permission;
+/**
+ * Schedules a monthly repeating local notification that fires at 9 AM on
+ * (due_day − 1) of each month. If due_day is 1, fires on the 1st (same day).
+ * Safe to call again — cancels any existing notification for this commitment
+ * before rescheduling.
+ */
+export async function scheduleCommitmentReminder(commitment: {
+  id: string;
+  name: string;
+  due_day: number | null;
+}): Promise<boolean> {
+  if (!isNative()) return false;
 
-  if (!VAPID_PUBLIC_KEY) {
-    console.warn('VITE_VAPID_PUBLIC_KEY not set — push subscription skipped.');
-    return 'granted';
-  }
+  const granted = await requestPermission();
+  if (!granted) return false;
 
-  const registration = await getOrRegisterSW();
-  if (!registration) return 'granted';
+  const { due_day, name, id } = commitment;
+  if (!due_day) return false;
 
-  try {
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer as ArrayBuffer,
-    });
+  const reminderDay = Math.max(1, due_day - 1);
+  const nId = notifId(id);
 
-    const json = subscription.toJSON();
-    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return 'granted';
+  // Cancel any existing notification first to avoid duplicates.
+  await LocalNotifications.cancel({ notifications: [{ id: nId }] }).catch(() => null);
 
-    await supabase.from('push_subscriptions').upsert(
+  await LocalNotifications.schedule({
+    notifications: [
       {
-        user_id: userId,
-        endpoint: json.endpoint,
-        p256dh: json.keys.p256dh,
-        auth: json.keys.auth,
+        id: nId,
+        title: 'Payment Due Tomorrow',
+        body: `${name} is due tomorrow. Make sure you're ready.`,
+        schedule: {
+          on: { day: reminderDay, hour: 9, minute: 0 },
+          repeats: true,
+          allowWhileIdle: true,
+        },
+        actionTypeId: '',
+        extra: { commitmentId: id },
       },
-      { onConflict: 'user_id,endpoint' },
-    );
-  } catch {
-    // Push subscription failed — permission is still granted, so return that.
-  }
+    ],
+  });
 
-  return 'granted';
+  return true;
 }
 
 /**
- * Cancels the push subscription and removes it from Supabase.
+ * Cancels the scheduled local notification for a commitment.
  */
-export async function unsubscribe(userId: string): Promise<void> {
-  if (!isNotificationSupported()) return;
-
-  const registration = await navigator.serviceWorker.getRegistration(SW_PATH);
-  if (!registration) return;
-
-  const subscription = await registration.pushManager.getSubscription();
-  if (!subscription) return;
-
-  const endpoint = subscription.endpoint;
-  await subscription.unsubscribe();
-  await supabase.from('push_subscriptions').delete().eq('user_id', userId).eq('endpoint', endpoint);
+export async function cancelCommitmentReminder(commitmentId: string): Promise<void> {
+  if (!isNative()) return;
+  await LocalNotifications.cancel({ notifications: [{ id: notifId(commitmentId) }] }).catch(
+    () => null,
+  );
 }

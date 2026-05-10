@@ -32,8 +32,8 @@ import {
   setCommitmentPaidPeriod,
 } from '@/lib/supabase/queries/commitments';
 import {
-  getPermission,
-  requestAndSubscribe,
+  scheduleCommitmentReminder,
+  cancelCommitmentReminder,
 } from '@/lib/notifications';
 
 const GRAD_GLOW =
@@ -387,15 +387,8 @@ export default function Cards() {
     }
   }
 
-  async function handleToggleNotify(id: string, current: boolean) {
-    const next = !current;
-    // When enabling, request push permission and subscribe if needed.
-    if (next && user) {
-      const perm = getPermission();
-      if (perm !== 'granted') {
-        await requestAndSubscribe(user.id);
-      }
-    }
+  async function handleToggleNotify(cm: Commitment) {
+    const next = !cm.notify_enabled;
     try {
       await toggleNotifyCommitment(id, next);
       await qc.invalidateQueries({ queryKey: ['commitments', user?.id] });
@@ -1728,7 +1721,7 @@ export default function Cards() {
                   <button
                     type="button"
                     aria-label={`${cm.name} reminder ${cm.notify_enabled ? 'on' : 'off'}`}
-                    onClick={() => handleToggleNotify(cm.id, cm.notify_enabled)}
+                    onClick={() => handleToggleNotify(cm)}
                     style={{
                       background: 'none',
                       border: 'none',

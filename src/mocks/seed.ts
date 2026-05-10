@@ -557,12 +557,12 @@ export const lhdnMock: LhdnMock = {
 };
 
 /**
- * Marketplace mock — curated claimable products keyed to LHDN relief
+ * Marketplace mock — curated claimable items keyed to LHDN relief
  * categories. Real category data (cap/used/color) is fetched live via
- * useLhdn(); this mock only covers static product copy + featured banner
+ * useLhdn(); this mock only covers static item copy + featured banner
  * because there's no products table yet.
  *
- * Each product's `categoryId` matches an `LhdnCategory.id` so the screen
+ * Each item's `categoryId` matches an `LhdnCategory.id` so the screen
  * can join product → live category color/name. Products without a
  * matching live category fall back to a generic purple chip.
  */
@@ -614,7 +614,7 @@ export type MarketplaceFeatured = {
 export type MarketplaceMock = {
   cartCount: number;
   featured: MarketplaceFeatured;
-  products: MarketplaceProduct[];
+  products: MarketplaceItem[];
 };
 
 export const marketplaceMock: MarketplaceMock = {

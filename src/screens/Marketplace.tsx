@@ -212,10 +212,14 @@ export default function Marketplace() {
         >
           <Icon name="search" size={16} color={tokens.color.faint} />
           <input
-            type="text"
+            type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={`Search ${products.length} claimable items`}
+            aria-label="Search marketplace"
+            autoComplete="off"
+            inputMode="search"
+            enterKeyHint="search"
             style={{
               flex: 1,
               border: 'none',

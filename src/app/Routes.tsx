@@ -17,6 +17,8 @@ import Settings from '@/screens/Settings';
 import FinSplit from '@/screens/FinSplit';
 import FinTravel from '@/screens/FinTravel';
 import Marketplace from '@/screens/Marketplace';
+import MarketplaceItemDetail from '@/screens/MarketplaceItem';
+import MarketplaceCart from '@/screens/MarketplaceCart';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SignupScreen from '@/features/auth/SignupScreen';
 import OnboardingScreen from '@/features/auth/OnboardingScreen';
@@ -174,6 +176,22 @@ export default function AppRoutes() {
           element={
             <Tab>
               <Marketplace />
+            </Tab>
+          }
+        />
+        <Route
+          path="/marketplace/cart"
+          element={
+            <Tab>
+              <MarketplaceCart />
+            </Tab>
+          }
+        />
+        <Route
+          path="/marketplace/items/:itemId"
+          element={
+            <Tab>
+              <MarketplaceItemDetail />
             </Tab>
           }
         />

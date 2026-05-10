@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Marketplace from './Marketplace';
 import { lhdnMock, marketplaceMock } from '@/mocks/seed';
+import { CartProvider } from '@/contexts/CartContext';
 
 // Signed-out: useLhdn is disabled, screen falls back to lhdnMock — same
 // pattern as Lhdn.test.tsx and Insights.test.tsx.
@@ -16,9 +17,11 @@ function renderMarketplace() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/marketplace']}>
-        <Marketplace />
-      </MemoryRouter>
+      <CartProvider>
+        <MemoryRouter initialEntries={['/marketplace']}>
+          <Marketplace />
+        </MemoryRouter>
+      </CartProvider>
     </QueryClientProvider>,
   );
 }
@@ -110,5 +113,33 @@ describe('Marketplace', () => {
   it('renders the LHDN compliance trust footer', () => {
     renderMarketplace();
     expect(screen.getByText('Curated for LHDN compliance')).toBeInTheDocument();
+  });
+
+  it('filters products by name when user types in the search input', async () => {
+    const user = userEvent.setup();
+    renderMarketplace();
+    const search = screen.getByPlaceholderText(/Search .* claimable items/i);
+    await user.type(search, 'atomic');
+    expect(screen.getByText('Atomic Habits')).toBeInTheDocument();
+    expect(screen.queryByText('Decathlon Domyos Mat')).not.toBeInTheDocument();
+  });
+
+  it('filters by subtitle text', async () => {
+    const user = userEvent.setup();
+    renderMarketplace();
+    const search = screen.getByPlaceholderText(/Search .* claimable items/i);
+    await user.type(search, 'yoga');
+    expect(screen.getByText('Decathlon Domyos Mat')).toBeInTheDocument();
+    expect(screen.queryByText('Atomic Habits')).not.toBeInTheDocument();
+  });
+
+  it('shows search-aware empty state when no items match', async () => {
+    const user = userEvent.setup();
+    renderMarketplace();
+    const search = screen.getByPlaceholderText(/Search .* claimable items/i);
+    await user.type(search, 'zzznevermatches');
+    expect(
+      screen.getByText(/No items match.+zzznevermatches/i),
+    ).toBeInTheDocument();
   });
 });

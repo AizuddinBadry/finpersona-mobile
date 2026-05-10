@@ -22,6 +22,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
+import { useCart } from '@/contexts/CartContext';
 import { useLhdn } from '@/hooks/useLhdn';
 import { lhdnMock, marketplaceMock } from '@/mocks/seed';
 import type { MarketplaceProduct } from '@/mocks/seed';
@@ -44,7 +45,8 @@ export default function Marketplace() {
   // Falls back to lhdnMock when the query is disabled (signed-out) or pending,
   // matching the Lhdn / Insights screens.
   const { data: lhdn = lhdnMock } = useLhdn();
-  const { products, featured, cartCount } = marketplaceMock;
+  const { products, featured } = marketplaceMock;
+  const { totalCount } = useCart();
 
   const [activeCategoryId, setActiveCategoryId] = useState<string>(ALL_CATEGORY_ID);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -152,7 +154,8 @@ export default function Marketplace() {
         </div>
         <button
           type="button"
-          aria-label={`Cart, ${cartCount} item${cartCount === 1 ? '' : 's'}`}
+          aria-label={`Cart, ${totalCount} item${totalCount === 1 ? '' : 's'}`}
+          onClick={() => navigate('/marketplace/cart')}
           style={{
             width: 36,
             height: 36,
@@ -169,7 +172,7 @@ export default function Marketplace() {
           }}
         >
           <Icon name="cart" size={18} color={tokens.color.ink2} />
-          {cartCount > 0 && (
+          {totalCount > 0 && (
             <span
               style={{
                 position: 'absolute',
@@ -190,7 +193,7 @@ export default function Marketplace() {
                 fontVariantNumeric: 'tabular-nums',
               }}
             >
-              {cartCount}
+              {totalCount}
             </span>
           )}
         </button>
@@ -551,7 +554,20 @@ export default function Marketplace() {
               const reliefName = (liveCat?.name ?? p.categoryId).toUpperCase();
               const reliefColor = liveCat?.color ?? tokens.color.purple;
               return (
-                <ProductCard key={p.id} p={p} reliefName={reliefName} reliefColor={reliefColor} />
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => navigate(`/marketplace/items/${p.id}`)}
+                  style={{
+                    all: 'unset',
+                    display: 'block',
+                    cursor: 'pointer',
+                    borderRadius: 18,
+                  }}
+                  aria-label={`Open ${p.name}`}
+                >
+                  <ProductCard p={p} reliefName={reliefName} reliefColor={reliefColor} />
+                </button>
               );
             })}
           </div>

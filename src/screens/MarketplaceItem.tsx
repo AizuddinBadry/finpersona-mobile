@@ -111,7 +111,11 @@ export default function MarketplaceItemDetail() {
   }
 
   const isProduct = item.kind === 'product';
-  const existingLine = lines.find((l) => l.itemId === item.id);
+  // Match by kind too — defends against any future ID collision across kinds
+  // and keeps this lookup symmetric with the qty lazy-initializer above.
+  const existingLine = lines.find(
+    (l) => l.kind === item.kind && l.itemId === item.id,
+  );
   const alreadyInCart = Boolean(existingLine);
 
   const reliefName = liveCategory?.name ?? item.categoryId;

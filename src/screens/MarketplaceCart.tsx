@@ -39,10 +39,14 @@ function lineAmount(entry: ResolvedLine): number {
 /**
  * Imperative toast: appended to document.body so it survives the
  * navigate('/marketplace') unmount triggered by checkout. React state
- * cannot deliver a toast that outlives its component tree.
+ * cannot deliver a toast that outlives its component tree. A module-level
+ * `activeToast` ref dedupes rapid double-clicks so we never stack
+ * overlapping toasts on top of each other.
  */
+let activeToast: HTMLDivElement | null = null;
 function showOrderPlacedToast(): void {
   if (typeof document === 'undefined') return;
+  if (activeToast) activeToast.remove();
   const toast = document.createElement('div');
   toast.setAttribute('role', 'status');
   toast.style.cssText = [
@@ -53,8 +57,8 @@ function showOrderPlacedToast(): void {
     'z-index:9999',
     'padding:12px 16px',
     'border-radius:12px',
-    'background:#1A1530',
-    'color:#fff',
+    `background:${tokens.color.ink}`,
+    `color:${tokens.color.white}`,
     'font-size:13px',
     'font-weight:600',
     'box-shadow:0 8px 24px rgba(0,0,0,0.3)',
@@ -63,7 +67,11 @@ function showOrderPlacedToast(): void {
   ].join(';');
   toast.textContent = 'Order placed (mock). Receipts will auto-file.';
   document.body.appendChild(toast);
-  window.setTimeout(() => toast.remove(), 3000);
+  activeToast = toast;
+  window.setTimeout(() => {
+    toast.remove();
+    if (activeToast === toast) activeToast = null;
+  }, 3000);
 }
 
 export default function MarketplaceCart() {
@@ -433,29 +441,37 @@ function CategorySection({
           overflow: 'hidden',
         }}
       >
-        {section.entries.map((entry, idx) => (
-          <div
-            key={`${entry.line.kind}-${entry.item.id}`}
-            style={{
-              borderTop: idx === 0 ? 'none' : `0.5px solid ${HAIRLINE}`,
-            }}
-          >
-            {entry.line.kind === 'product' ? (
-              <ProductRow
-                item={entry.item}
-                qty={entry.line.qty}
-                onDecrement={() => onDecrement(entry.item.id, entry.line.kind === 'product' ? entry.line.qty : 1)}
-                onIncrement={() => onIncrement(entry.item.id, entry.line.kind === 'product' ? entry.line.qty : 1)}
-                onRemove={() => onRemove(entry.item.id)}
-              />
-            ) : (
-              <ServiceRow
-                item={entry.item}
-                onRemove={() => onRemove(entry.item.id)}
-              />
-            )}
-          </div>
-        ))}
+        {section.entries.map((entry, idx) => {
+          const { line, item } = entry;
+          return (
+            <div
+              key={`${line.kind}-${item.id}`}
+              style={{
+                borderTop: idx === 0 ? 'none' : `0.5px solid ${HAIRLINE}`,
+              }}
+            >
+              {line.kind === 'product' ? (
+                (() => {
+                  const qty = line.qty;
+                  return (
+                    <ProductRow
+                      item={item}
+                      qty={qty}
+                      onDecrement={() => onDecrement(item.id, qty)}
+                      onIncrement={() => onIncrement(item.id, qty)}
+                      onRemove={() => onRemove(item.id)}
+                    />
+                  );
+                })()
+              ) : (
+                <ServiceRow
+                  item={item}
+                  onRemove={() => onRemove(item.id)}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -1,3 +1,7 @@
+/* eslint-disable react-refresh/only-export-components --
+ * Provider + hook co-located by convention. Splitting `useCart` into a
+ * sibling file would cost discoverability for a marginal HMR benefit.
+ */
 /**
  * CartContext — Marketplace cart state, persisted to sessionStorage.
  *

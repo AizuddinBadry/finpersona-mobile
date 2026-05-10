@@ -1,57 +1,45 @@
-import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { CartProvider, useCart } from '@/contexts/CartContext';
+import { CartProvider } from '@/contexts/CartContext';
 import MarketplaceCart from './MarketplaceCart';
-import { marketplaceMock } from '@/mocks/seed';
 
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: null }) }));
 
-function Seed({ children }: { children: React.ReactNode }) {
-  // Helper component that seeds the cart with one product (qty=2) and one service.
-  const { add } = useCart();
-  const seeded = React.useRef(false);
-  if (!seeded.current) {
-    const p1 = marketplaceMock.products.find((p) => p.id === 'p1')!;
-    const s1 = marketplaceMock.products.find((p) => p.id === 's1')!;
-    add(p1, 2);
-    add(s1);
-    seeded.current = true;
-  }
-  return <>{children}</>;
+/**
+ * Pre-populate sessionStorage so `CartProvider`'s lazy initializer hydrates
+ * with one product (qty=2) and one service. Cleaner than seeding via a hook
+ * inside a wrapper component (which would have to call `add` during render).
+ */
+function seedCart(): void {
+  sessionStorage.setItem(
+    'finpersona.cart.v1',
+    JSON.stringify({
+      lines: [
+        { kind: 'product', itemId: 'p1', qty: 2 },
+        { kind: 'service', itemId: 's1' },
+      ],
+    }),
+  );
 }
 
 function renderCart({ seed = false } = {}) {
+  if (seed) seedCart();
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <CartProvider>
-        {seed ? (
-          <Seed>
-            <MemoryRouter initialEntries={['/marketplace/cart']}>
-              <Routes>
-                <Route path="/marketplace/cart" element={<MarketplaceCart />} />
-                <Route
-                  path="/marketplace"
-                  element={<div data-testid="mp">mp</div>}
-                />
-              </Routes>
-            </MemoryRouter>
-          </Seed>
-        ) : (
-          <MemoryRouter initialEntries={['/marketplace/cart']}>
-            <Routes>
-              <Route path="/marketplace/cart" element={<MarketplaceCart />} />
-              <Route
-                path="/marketplace"
-                element={<div data-testid="mp">mp</div>}
-              />
-            </Routes>
-          </MemoryRouter>
-        )}
+        <MemoryRouter initialEntries={['/marketplace/cart']}>
+          <Routes>
+            <Route path="/marketplace/cart" element={<MarketplaceCart />} />
+            <Route
+              path="/marketplace"
+              element={<div data-testid="mp">mp</div>}
+            />
+          </Routes>
+        </MemoryRouter>
       </CartProvider>
     </QueryClientProvider>,
   );

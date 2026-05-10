@@ -58,11 +58,11 @@ describe('Marketplace', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows the cart button with badge count from the mock', () => {
+  it('shows the cart button wired to useCart (zero badge when empty)', () => {
     renderMarketplace();
-    expect(
-      screen.getByRole('button', { name: /Cart, 2 items/ }),
-    ).toBeInTheDocument();
+    // The cart context starts empty; badge text should not contain a digit.
+    const cartBtn = screen.getByRole('button', { name: /^Cart, 0 items?$/i });
+    expect(cartBtn).toBeInTheDocument();
   });
 
   it('renders the relief headroom strip with totalLeft from real LHDN cats', () => {

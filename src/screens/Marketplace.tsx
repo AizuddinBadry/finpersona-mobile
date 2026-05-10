@@ -561,10 +561,10 @@ export default function Marketplace() {
                   style={{
                     all: 'unset',
                     display: 'block',
+                    width: '100%',
                     cursor: 'pointer',
                     borderRadius: 18,
                   }}
-                  aria-label={`Open ${p.name}`}
                 >
                   <ProductCard p={p} reliefName={reliefName} reliefColor={reliefColor} />
                 </button>

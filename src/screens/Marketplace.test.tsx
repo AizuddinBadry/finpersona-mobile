@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Marketplace from './Marketplace';
 import { lhdnMock, marketplaceMock } from '@/mocks/seed';
@@ -20,6 +20,29 @@ function renderMarketplace() {
       <CartProvider>
         <MemoryRouter initialEntries={['/marketplace']}>
           <Marketplace />
+        </MemoryRouter>
+      </CartProvider>
+    </QueryClientProvider>,
+  );
+}
+
+function renderMarketplaceWithDetailRoute() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <CartProvider>
+        <MemoryRouter initialEntries={['/marketplace']}>
+          <Routes>
+            <Route path="/marketplace" element={<Marketplace />} />
+            <Route
+              path="/marketplace/items/:itemId"
+              element={<div data-testid="detail">detail-page</div>}
+            />
+            <Route
+              path="/marketplace/cart"
+              element={<div data-testid="cart">cart-page</div>}
+            />
+          </Routes>
         </MemoryRouter>
       </CartProvider>
     </QueryClientProvider>,
@@ -141,5 +164,27 @@ describe('Marketplace', () => {
     expect(
       screen.getByText(/No items match.+zzznevermatches/i),
     ).toBeInTheDocument();
+  });
+
+  it('navigates to /marketplace/items/:itemId when a product card is clicked', async () => {
+    renderMarketplaceWithDetailRoute();
+    const card = screen.getByText('Atomic Habits').closest('button');
+    expect(card).not.toBeNull();
+    await userEvent.click(card!);
+    expect(screen.getByTestId('detail')).toBeInTheDocument();
+  });
+
+  it('navigates to /marketplace/cart when the cart button is clicked', async () => {
+    renderMarketplaceWithDetailRoute();
+    const cartBtn = screen.getByRole('button', { name: /^Cart, /i });
+    await userEvent.click(cartBtn);
+    expect(screen.getByTestId('cart')).toBeInTheDocument();
+  });
+
+  it('hides the cart badge when totalCount is 0', () => {
+    renderMarketplace();
+    // No badge digit visible since cart is empty.
+    const cartBtn = screen.getByRole('button', { name: /^Cart, 0 items?$/i });
+    expect(cartBtn.textContent).not.toMatch(/\d/);
   });
 });

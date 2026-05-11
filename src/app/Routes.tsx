@@ -19,6 +19,10 @@ import FinTravel from '@/screens/FinTravel';
 import Marketplace from '@/screens/Marketplace';
 import MarketplaceItemDetail from '@/screens/MarketplaceItem';
 import MarketplaceCart from '@/screens/MarketplaceCart';
+import CheckoutReview from '@/screens/CheckoutReview';
+import CheckoutStatus from '@/screens/CheckoutStatus';
+import Orders from '@/screens/Orders';
+import OrderDetail from '@/screens/OrderDetail';
 import LoginScreen from '@/features/auth/LoginScreen';
 import SignupScreen from '@/features/auth/SignupScreen';
 import OnboardingScreen from '@/features/auth/OnboardingScreen';
@@ -192,6 +196,38 @@ export default function AppRoutes() {
           element={
             <Tab>
               <MarketplaceItemDetail />
+            </Tab>
+          }
+        />
+        <Route
+          path="/checkout/review"
+          element={
+            <Tab hideNav>
+              <CheckoutReview />
+            </Tab>
+          }
+        />
+        <Route
+          path="/checkout/status"
+          element={
+            <Tab hideNav>
+              <CheckoutStatus />
+            </Tab>
+          }
+        />
+        <Route
+          path="/orders"
+          element={
+            <Tab>
+              <Orders />
+            </Tab>
+          }
+        />
+        <Route
+          path="/orders/:orderId"
+          element={
+            <Tab hideNav>
+              <OrderDetail />
             </Tab>
           }
         />

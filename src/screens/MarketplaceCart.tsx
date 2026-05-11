@@ -2,14 +2,16 @@
  * MarketplaceCart — review screen for items added from the Marketplace.
  *
  * Lines are grouped by live LHDN category, products carry per-row qty
- * steppers, services render as singleton booking rows, and Checkout
- * clears the cart with a mock confirmation toast.
+ * steppers, services render as singleton booking rows. Checkout creates
+ * an order via the create-order Edge Function, then opens the payment
+ * gateway URL via the initiate-payment Edge Function.
  */
-import { useMemo, type CSSProperties } from 'react';
+import { Fragment, useMemo, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { useCart, type CartLine } from '@/contexts/CartContext';
 import { useLhdn } from '@/hooks/useLhdn';
+import { useMarketplaceProducts } from '@/hooks/useMarketplaceProducts';
 import {
   lhdnMock,
   marketplaceMock,
@@ -36,57 +38,20 @@ function lineAmount(entry: ResolvedLine): number {
     : entry.item.price;
 }
 
-/**
- * Imperative toast: appended to document.body so it survives the
- * navigate('/marketplace') unmount triggered by checkout. React state
- * cannot deliver a toast that outlives its component tree. A module-level
- * `activeToast` ref dedupes rapid double-clicks so we never stack
- * overlapping toasts on top of each other.
- */
-let activeToast: HTMLDivElement | null = null;
-function showOrderPlacedToast(): void {
-  if (typeof document === 'undefined') return;
-  if (activeToast) activeToast.remove();
-  const toast = document.createElement('div');
-  toast.setAttribute('role', 'status');
-  toast.style.cssText = [
-    'position:fixed',
-    'top:16px',
-    'left:16px',
-    'right:16px',
-    'z-index:9999',
-    'padding:12px 16px',
-    'border-radius:12px',
-    `background:${tokens.color.ink}`,
-    `color:${tokens.color.white}`,
-    'font-size:13px',
-    'font-weight:600',
-    'box-shadow:0 8px 24px rgba(0,0,0,0.3)',
-    'text-align:center',
-    'letter-spacing:-0.2px',
-  ].join(';');
-  toast.textContent = 'Order placed (mock). Receipts will auto-file.';
-  document.body.appendChild(toast);
-  activeToast = toast;
-  window.setTimeout(() => {
-    toast.remove();
-    if (activeToast === toast) activeToast = null;
-  }, 3000);
-}
-
 export default function MarketplaceCart() {
   const navigate = useNavigate();
   const { data: lhdn = lhdnMock } = useLhdn();
-  const { lines, setQty, remove, clear } = useCart();
+  const { data: products = marketplaceMock.products } = useMarketplaceProducts();
+  const { lines, setQty, remove } = useCart();
 
   const resolved: ResolvedLine[] = useMemo(() => {
     const out: ResolvedLine[] = [];
     for (const line of lines) {
-      const item = marketplaceMock.products.find((p) => p.id === line.itemId);
+      const item = products.find((p) => p.id === line.itemId);
       if (item) out.push({ line, item });
     }
     return out;
-  }, [lines]);
+  }, [lines, products]);
 
   const sections: Section[] = useMemo(() => {
     if (resolved.length === 0) return [];
@@ -131,11 +96,7 @@ export default function MarketplaceCart() {
   const reliefCount = sections.length;
   const isEmpty = resolved.length === 0;
 
-  const onCheckout = () => {
-    showOrderPlacedToast();
-    clear();
-    navigate('/marketplace');
-  };
+  const onCheckout = () => navigate('/checkout/review');
 
   return (
     <div style={{ color: tokens.color.ink, paddingBottom: isEmpty ? 24 : 170 }}>
@@ -228,6 +189,7 @@ export default function MarketplaceCart() {
       )}
 
       {!isEmpty && (
+        <Fragment>
         <div
           style={{
             position: 'fixed',
@@ -293,6 +255,7 @@ export default function MarketplaceCart() {
             <Icon name="arrowRight" size={14} color="#fff" strokeWidth={2.4} />
           </button>
         </div>
+        </Fragment>
       )}
     </div>
   );
@@ -864,7 +827,7 @@ function OrderSummary({
           lineHeight: 1.5,
         }}
       >
-        Receipts will file automatically to your Borang BE on purchase.
+        Keep your receipts — you may need them when filing Borang BE with LHDN.
       </div>
     </div>
   );

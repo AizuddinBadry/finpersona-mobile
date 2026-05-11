@@ -154,6 +154,19 @@ export default function Home() {
           >
             <Icon name="pulse" size={18} color="#3A3458" />
           </Link>
+          <Link
+            to="/orders"
+            aria-label="My Orders"
+            className="bg-surface shadow-card flex items-center justify-center"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              border: '0.5px solid rgba(91,71,168,0.10)',
+            }}
+          >
+            <Icon name="package" size={18} color="#3A3458" />
+          </Link>
         </div>
       </div>
 

@@ -390,7 +390,12 @@ export default function Cards() {
   async function handleToggleNotify(cm: Commitment) {
     const next = !cm.notify_enabled;
     try {
-      await toggleNotifyCommitment(id, next);
+      if (next) {
+        await scheduleCommitmentReminder({ id: cm.id, name: cm.name, due_day: cm.due_day });
+      } else {
+        await cancelCommitmentReminder(cm.id);
+      }
+      await toggleNotifyCommitment(cm.id, next);
       await qc.invalidateQueries({ queryKey: ['commitments', user?.id] });
     } catch {
       // silent — notify toggle is non-critical

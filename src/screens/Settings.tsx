@@ -191,6 +191,29 @@ export default function Settings() {
         >
           <ReadOnlyRow label="Name" value={fullName} />
           <ReadOnlyRow label="Email" value={email} divider />
+          <button
+            type="button"
+            onClick={() => navigate('/orders')}
+            className="flex items-center justify-between bg-surface"
+            style={{
+              width: '100%',
+              padding: '14px 18px',
+              background: 'transparent',
+              border: 'none',
+              borderTop: '0.5px solid rgba(91,71,168,0.10)',
+              cursor: 'pointer',
+              textAlign: 'left',
+              gap: 12,
+            }}
+          >
+            <span
+              className="font-semibold text-ink"
+              style={{ fontSize: 13, letterSpacing: -0.1 }}
+            >
+              My Orders
+            </span>
+            <Icon name="chevronRight" size={14} color="#A8A2BD" />
+          </button>
         </div>
       </div>
 

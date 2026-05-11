@@ -24,6 +24,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { useCart } from '@/contexts/CartContext';
 import { useLhdn } from '@/hooks/useLhdn';
+import { useMarketplaceProducts } from '@/hooks/useMarketplaceProducts';
 import { lhdnMock, marketplaceMock } from '@/mocks/seed';
 import type { MarketplaceProduct } from '@/mocks/seed';
 import { tokens } from '@/styles/tokens';
@@ -45,7 +46,8 @@ export default function Marketplace() {
   // Falls back to lhdnMock when the query is disabled (signed-out) or pending,
   // matching the Lhdn / Insights screens.
   const { data: lhdn = lhdnMock } = useLhdn();
-  const { products, featured } = marketplaceMock;
+  const { data: products = marketplaceMock.products } = useMarketplaceProducts();
+  const { featured } = marketplaceMock;
   const { totalCount } = useCart();
 
   const [activeCategoryId, setActiveCategoryId] = useState<string>(ALL_CATEGORY_ID);
@@ -620,8 +622,7 @@ export default function Marketplace() {
                 lineHeight: 1.4,
               }}
             >
-              Every product is reviewed for relief eligibility. Receipts file
-              automatically to your Borang BE.
+              Products curated for LHDN relief categories.
             </div>
           </div>
         </div>
@@ -651,7 +652,7 @@ function ProductCard({
         position: 'relative',
       }}
     >
-      {/* Image placeholder */}
+      {/* Thumbnail */}
       <div
         style={{
           aspectRatio: '1',
@@ -660,9 +661,18 @@ function ProductCard({
           alignItems: 'center',
           justifyContent: 'center',
           position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        <Icon name={p.iconName} size={42} color="rgba(255,255,255,0.9)" strokeWidth={1.4} />
+        {p.images?.[0] ? (
+          <img
+            src={p.images[0]}
+            alt={p.name}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : (
+          <Icon name={p.iconName} size={42} color="rgba(255,255,255,0.9)" strokeWidth={1.4} />
+        )}
         {p.hot && (
           <div
             style={{

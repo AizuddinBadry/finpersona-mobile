@@ -583,6 +583,8 @@ export type MarketplaceItem = {
   hot?: boolean;
   /** Detail-screen description paragraph. */
   description: string;
+  /** Product images — first element used as hero/thumbnail. */
+  images?: string[];
   /**
    * Discriminator: 'product' is qty-buyable, 'service' is a consultation
    * booking with no quantity (doctor visit, takaful planning, etc.).

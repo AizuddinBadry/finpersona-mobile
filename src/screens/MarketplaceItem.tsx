@@ -11,6 +11,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { useCart } from '@/contexts/CartContext';
 import { useLhdn } from '@/hooks/useLhdn';
+import { useMarketplaceProducts } from '@/hooks/useMarketplaceProducts';
 import { lhdnMock, marketplaceMock } from '@/mocks/seed';
 import { tokens } from '@/styles/tokens';
 
@@ -40,9 +41,10 @@ export default function MarketplaceItemDetail() {
   const { itemId } = useParams<{ itemId: string }>();
   const navigate = useNavigate();
   const { data: lhdn = lhdnMock } = useLhdn();
+  const { data: products = marketplaceMock.products } = useMarketplaceProducts();
   const { lines, totalCount, add } = useCart();
 
-  const item = marketplaceMock.products.find((p) => p.id === itemId);
+  const item = products.find((p) => p.id === itemId);
 
   // Lazy initial qty: if a product line already exists, prefill from it.
   const [qty, setQty] = useState<number>(() => {
@@ -262,7 +264,15 @@ export default function MarketplaceItemDetail() {
             boxShadow: SHADOW_CARD,
           }}
         >
-          <Icon name={item.iconName} size={72} color="rgba(255,255,255,0.95)" strokeWidth={1.4} />
+          {item.images?.[0] ? (
+            <img
+              src={item.images[0]}
+              alt={item.name}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            <Icon name={item.iconName} size={72} color="rgba(255,255,255,0.95)" strokeWidth={1.4} />
+          )}
           {item.hot && (
             <div
               style={{
@@ -643,31 +653,6 @@ export default function MarketplaceItemDetail() {
             </ul>
           </div>
         )}
-
-        {/* Receipt auto-filed strip */}
-        <div
-          style={{
-            marginTop: 16,
-            padding: '10px 12px',
-            borderRadius: 12,
-            background: tokens.color.greenSoft,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          <Icon name="check" size={12} color={tokens.color.green} strokeWidth={2.6} />
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: tokens.color.green,
-              letterSpacing: 0.2,
-            }}
-          >
-            Receipt auto-filed
-          </span>
-        </div>
       </div>
 
       {/* Sticky bottom bar — sits above the floating bottom nav (bottom:18 + height:72 = 90px) */}

@@ -63,8 +63,8 @@ function rowToForm(row: ReceiptRow): Required<ReceiptUpdate> {
     receiptDate: row.receipt_date,
     totalAmount: Number(row.total_amount),
     currency: row.currency,
-    category: row.category ?? '',
-    isClaimable: row.is_claimable,
+    category: row.category ?? row.extracted_data?.suggested_category ?? '',
+    isClaimable: row.is_claimable ?? row.extracted_data?.is_eligible ?? false,
   };
 }
 
@@ -215,9 +215,6 @@ function LoadedState({
   onBack: () => void;
   onDeleted: () => void;
 }) {
-  const reasoning = data.extracted_data?.reasoning;
-  const eligibility = data.extracted_data?.eligibility_explanation;
-
   const update = useUpdateReceipt();
   const del = useDeleteReceipt();
   const [phase, setPhase] = useState<Phase>('view');
@@ -586,12 +583,9 @@ function LoadedState({
             <ViewBody data={data} />
           )}
 
-          {/* Collapsible rationale sections — read-only in both phases. */}
-          {reasoning != null && (
-            <CollapsibleRow title="AI reasoning" body={reasoning} />
-          )}
-          {eligibility != null && (
-            <CollapsibleRow title="Why eligible" body={eligibility} />
+          {/* AI analysis — read-only in both phases. */}
+          {data.extracted_data != null && (
+            <AiAnalysisCard extracted={data.extracted_data} />
           )}
 
           {/* Delete row — only visible in view phase. */}
@@ -644,6 +638,10 @@ function LoadedState({
 }
 
 function ViewBody({ data }: { data: ReceiptRow }) {
+  const effectiveCategory =
+    data.category ?? data.extracted_data?.suggested_category ?? null;
+  const effectiveClaimable =
+    data.is_claimable ?? data.extracted_data?.is_eligible ?? false;
   return (
     <div style={{ padding: 18 }}>
       {/* Merchant */}
@@ -675,7 +673,7 @@ function ViewBody({ data }: { data: ReceiptRow }) {
         className="flex items-center"
         style={{ gap: 8, marginTop: 14, flexWrap: 'wrap' }}
       >
-        {data.category && (
+        {effectiveCategory && (
           <span
             className="font-semibold"
             style={{
@@ -687,15 +685,15 @@ function ViewBody({ data }: { data: ReceiptRow }) {
               letterSpacing: 0.2,
             }}
           >
-            {data.category}
+            {effectiveCategory}
           </span>
         )}
         <span
           className="font-semibold"
           style={{
             fontSize: 11,
-            color: data.is_claimable ? '#1FB573' : '#7A7392',
-            background: data.is_claimable ? '#D6F5E5' : '#F1ECFB',
+            color: effectiveClaimable ? '#1FB573' : '#7A7392',
+            background: effectiveClaimable ? '#D6F5E5' : '#F1ECFB',
             padding: '5px 10px',
             borderRadius: 999,
             letterSpacing: 0.2,
@@ -705,7 +703,7 @@ function ViewBody({ data }: { data: ReceiptRow }) {
           }}
         >
           <span data-testid="receipt-claimable">
-            {data.is_claimable ? '✓' : '—'}
+            {effectiveClaimable ? '✓' : '—'}
           </span>
           LHDN claimable
         </span>
@@ -836,19 +834,24 @@ function EditBody({
   );
 }
 
-function CollapsibleRow({ title, body }: { title: string; body: string }) {
-  const [open, setOpen] = useState(false);
+type ExtractedSection = NonNullable<ReceiptRow['extracted_data']>;
+
+function AiAnalysisCard({ extracted }: { extracted: ExtractedSection }) {
+  const [open, setOpen] = useState(true);
+  const hasContent =
+    extracted.reasoning ||
+    extracted.eligibility_explanation ||
+    (extracted.tax_relief_rules && (extracted.tax_relief_rules as string[]).length > 0);
+  if (!hasContent) return null;
+  const rules = extracted.tax_relief_rules as string[] | undefined;
+  const confidence = extracted.category_confidence as number | undefined;
   return (
-    <div
-      style={{
-        borderTop: '0.5px solid rgba(91,71,168,0.10)',
-      }}
-    >
+    <div style={{ borderTop: '0.5px solid rgba(91,71,168,0.10)' }}>
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
         aria-expanded={open}
-        className="flex items-center justify-between bg-surface"
+        className="flex items-center justify-between"
         style={{
           width: '100%',
           padding: '14px 18px',
@@ -858,12 +861,40 @@ function CollapsibleRow({ title, body }: { title: string; body: string }) {
           textAlign: 'left',
         }}
       >
-        <span
-          className="font-semibold text-ink"
-          style={{ fontSize: 13, letterSpacing: -0.1 }}
-        >
-          {title}
-        </span>
+        <div className="flex items-center" style={{ gap: 8 }}>
+          <div
+            className="flex items-center justify-center"
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 7,
+              background: GRAD_HERO,
+            }}
+          >
+            <Icon name="sparkle" size={12} color="#fff" strokeWidth={2.4} />
+          </div>
+          <span
+            className="font-semibold text-ink"
+            style={{ fontSize: 13, letterSpacing: -0.1 }}
+          >
+            AI analysis
+          </span>
+          {confidence != null && (
+            <span
+              className="font-semibold"
+              style={{
+                fontSize: 10,
+                color: confidence >= 0.8 ? '#1FB573' : '#C97B12',
+                background: confidence >= 0.8 ? '#D6F5E5' : '#FEF3C7',
+                padding: '2px 7px',
+                borderRadius: 999,
+                letterSpacing: 0.2,
+              }}
+            >
+              {Math.round(confidence * 100)}% confidence
+            </span>
+          )}
+        </div>
         <span
           aria-hidden
           style={{
@@ -876,17 +907,74 @@ function CollapsibleRow({ title, body }: { title: string; body: string }) {
         </span>
       </button>
       {open && (
-        <div
-          className="text-muted"
-          style={{
-            padding: '0 18px 14px',
-            fontSize: 12,
-            lineHeight: 1.55,
-          }}
-        >
-          {body}
+        <div style={{ padding: '0 18px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {extracted.reasoning && (
+            <AiSection
+              label="Reasoning"
+              icon="flash"
+              body={extracted.reasoning as string}
+            />
+          )}
+          {extracted.eligibility_explanation && (
+            <AiSection
+              label="LHDN eligibility"
+              icon="shield"
+              body={extracted.eligibility_explanation as string}
+            />
+          )}
+          {rules && rules.length > 0 && (
+            <div>
+              <div
+                className="font-semibold"
+                style={{ fontSize: 11, color: '#7A7392', letterSpacing: 0.3, textTransform: 'uppercase', marginBottom: 6 }}
+              >
+                Tax relief rules applied
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {rules.map((rule, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start"
+                    style={{ gap: 8 }}
+                  >
+                    <span style={{ color: '#6E4CE6', fontSize: 12, lineHeight: 1.5, flexShrink: 0 }}>•</span>
+                    <span className="text-muted" style={{ fontSize: 12, lineHeight: 1.55 }}>{rule}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function AiSection({ label, icon, body }: { label: string; icon: import('@/components/Icon').IconName; body: string }) {
+  return (
+    <div
+      style={{
+        padding: '10px 12px',
+        borderRadius: 12,
+        background: 'linear-gradient(135deg, #F5F2FE, #EDE7FB)',
+        border: '0.5px solid rgba(91,71,168,0.12)',
+      }}
+    >
+      <div
+        className="flex items-center"
+        style={{ gap: 6, marginBottom: 5 }}
+      >
+        <Icon name={icon} size={13} color="#5837C9" strokeWidth={2.2} />
+        <span
+          className="font-semibold"
+          style={{ fontSize: 11, color: '#5837C9', letterSpacing: 0.3, textTransform: 'uppercase' }}
+        >
+          {label}
+        </span>
+      </div>
+      <p className="text-muted" style={{ fontSize: 12, lineHeight: 1.55, margin: 0 }}>
+        {body}
+      </p>
     </div>
   );
 }

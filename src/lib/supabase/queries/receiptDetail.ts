@@ -31,6 +31,11 @@ export type ReceiptRow = {
   extracted_data: {
     reasoning?: string;
     eligibility_explanation?: string;
+    suggested_category?: string;
+    category_confidence?: number;
+    is_eligible?: boolean;
+    tax_relief_rules?: string[];
+    purchase_type?: string;
     [key: string]: unknown;
   } | null;
   created_at: string;

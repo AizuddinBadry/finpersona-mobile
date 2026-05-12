@@ -26,12 +26,11 @@ const INK2 = '#3A3458';
 const MUTED = '#7A7392';
 const MIST = '#F5F2FE';
 const HAIRLINE = 'rgba(91,71,168,0.12)';
-const TEAL = '#0EA5A0';
 const PURPLE = '#6E4CE6';
 const SHADOW_CARD = '0 1px 2px rgba(40,20,90,0.04), 0 8px 24px rgba(60,40,140,0.06)';
-const SHADOW_TEAL = '0 8px 24px rgba(14,165,160,0.28), 0 2px 8px rgba(14,165,160,0.16)';
+const SHADOW_PURPLE = '0 8px 24px rgba(110,76,230,0.28), 0 2px 8px rgba(110,76,230,0.16)';
 
-const GRAD_TEAL = 'linear-gradient(135deg, #0B7A77 0%, #0EA5A0 55%, #14C4BC 100%)';
+const GRAD_HERO = 'linear-gradient(135deg, #6E4CE6 0%, #9B7BF1 60%, #C9BAFB 100%)';
 const GRAD_GLOW = 'radial-gradient(120% 80% at 0% 0%, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 60%)';
 const GRAD_GREEN = 'linear-gradient(135deg, #0A8A5C 0%, #1FB573 100%)';
 const GRAD_RED = 'linear-gradient(135deg, #C53030 0%, #E5484D 100%)';
@@ -161,6 +160,53 @@ function fmt(n: number) {
   return `RM ${n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/**
+ * Coerce an itinerary payload into the canonical ItineraryResponse shape,
+ * handling both the current schema and older saved itineraries that used
+ * different field names (estimated_cost_per_night, estimated_total, etc.).
+ */
+function normalizeItinerary(raw: unknown, userBudget = 0): ItineraryResponse {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = raw as any;
+  const nightlyCost: number =
+    r.accommodation?.nightly_cost ?? r.accommodation?.estimated_cost_per_night ?? 0;
+  const ba = r.budget_analysis ?? {};
+  let status: 'under' | 'over';
+  let variance: number;
+  if (ba.status !== undefined) {
+    status = ba.status as 'under' | 'over';
+    variance = Number(ba.variance) || 0;
+  } else {
+    const withinBudget = ba.within_budget !== false;
+    status = withinBudget ? 'under' : 'over';
+    variance = userBudget > 0 ? Math.abs((ba.estimated_total ?? 0) - userBudget) : 0;
+  }
+  const insight: string = ba.insight ?? ba.financial_insight ?? '';
+  const flights: FlightOption[] = (r.flight_recommendations ?? []).map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (f: any) => ({
+      airline: f.airline ?? '',
+      price_per_pax: f.price_per_pax ?? f.estimated_price_per_person ?? 0,
+      booking_tip: f.booking_tip ?? f.tip,
+    }),
+  );
+  const transport = r.transport_to_destination
+    ? {
+        mode: r.transport_to_destination.mode ?? '',
+        cost: r.transport_to_destination.cost ?? r.transport_to_destination.estimated_cost ?? 0,
+        duration: r.transport_to_destination.duration ?? '',
+        tip: r.transport_to_destination.tip ?? '',
+      }
+    : undefined;
+  return {
+    ...r,
+    accommodation: { ...r.accommodation, nightly_cost: nightlyCost },
+    budget_analysis: { status, variance, insight },
+    flight_recommendations: flights.length > 0 ? flights : undefined,
+    transport_to_destination: transport,
+  };
+}
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
 }
@@ -218,12 +264,12 @@ function StepIndicator({ step }: { step: number }) {
               width: 28,
               height: 28,
               borderRadius: '50%',
-              background: step >= n ? TEAL : MIST,
+              background: step >= n ? PURPLE : MIST,
               color: step >= n ? '#fff' : MUTED,
               fontSize: 12,
               fontWeight: 700,
-              border: `2px solid ${step >= n ? TEAL : HAIRLINE}`,
-              boxShadow: step === n ? SHADOW_TEAL : 'none',
+              border: `2px solid ${step >= n ? PURPLE : HAIRLINE}`,
+              boxShadow: step === n ? SHADOW_PURPLE : 'none',
               transition: 'all 0.2s',
             }}
           >
@@ -231,9 +277,9 @@ function StepIndicator({ step }: { step: number }) {
           </div>
           {i < 2 && (
             <div style={{
-              width: 44,
-              height: 2,
-              background: step > n ? TEAL : HAIRLINE,
+            width: 44,
+            height: 2,
+            background: step > n ? PURPLE : HAIRLINE,
               transition: 'all 0.2s',
             }} />
           )}
@@ -290,9 +336,9 @@ function PrimaryBtn({ children, onClick, disabled = false }: {
       onClick={onClick}
       disabled={disabled}
       style={{
-        width: '100%', background: disabled ? MIST : TEAL, border: 'none', borderRadius: 14,
+        width: '100%', background: disabled ? MIST : PURPLE, border: 'none', borderRadius: 14,
         padding: '14px', color: disabled ? MUTED : '#fff', fontSize: 15, fontWeight: 700,
-        boxShadow: disabled ? 'none' : SHADOW_TEAL, transition: 'all 0.2s',
+        boxShadow: disabled ? 'none' : SHADOW_PURPLE, transition: 'all 0.2s',
       }}
     >
       {children}
@@ -325,7 +371,6 @@ interface Step1Props {
 }
 
 function Step1Destination({ origin, setOrigin, destination, setDestination, onNext }: Step1Props) {
-  const { API_BASE_URL } = getEnv();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Destination[]>([]);
   const [popular, setPopular] = useState<Destination[]>([]);
@@ -334,13 +379,14 @@ function Step1Destination({ origin, setOrigin, destination, setDestination, onNe
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    authHeader().then((h) =>
-      fetch(`${API_BASE_URL}/api/travel/destinations?popular=true`, { headers: h })
-        .then((r) => r.json())
-        .then((d) => setPopular(Array.isArray(d) ? d : []))
-        .catch(() => {})
-    );
-  }, [API_BASE_URL]);
+    supabase
+      .from('travel_destinations')
+      .select('id, country, country_code, city, region, is_popular')
+      .eq('is_popular', true)
+      .order('city')
+      .limit(20)
+      .then(({ data }) => setPopular((data ?? []) as Destination[]));
+  }, []);
 
   const handleQuery = useCallback((v: string) => {
     setQuery(v);
@@ -348,14 +394,15 @@ function Step1Destination({ origin, setOrigin, destination, setDestination, onNe
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!v.trim()) { setResults([]); return; }
     debounceRef.current = setTimeout(() => {
-      authHeader().then((h) =>
-        fetch(`${API_BASE_URL}/api/travel/destinations?q=${encodeURIComponent(v)}`, { headers: h })
-          .then((r) => r.json())
-          .then((d) => setResults(Array.isArray(d) ? d : []))
-          .catch(() => {})
-      );
+      supabase
+        .from('travel_destinations')
+        .select('id, country, country_code, city, region, is_popular')
+        .or(`city.ilike.%${v}%,country.ilike.%${v}%`)
+        .order('is_popular', { ascending: false })
+        .limit(15)
+        .then(({ data }) => setResults((data ?? []) as Destination[]));
     }, 300);
-  }, [API_BASE_URL, setDestination]);
+  }, [setDestination]);
 
   const pickDestination = (d: Destination) => {
     setDestination(d);
@@ -402,7 +449,7 @@ function Step1Destination({ origin, setOrigin, destination, setDestination, onNe
               >
                 <span style={{ fontSize: 18 }}>{c.flag}</span>
                 <span style={{ fontSize: 14, color: INK, flex: 1, textAlign: 'left' }}>{c.name}</span>
-                {origin === c.code && <span style={{ fontSize: 13, color: TEAL, fontWeight: 700 }}>✓</span>}
+                {origin === c.code && <span style={{ fontSize: 13, color: PURPLE, fontWeight: 700 }}>✓</span>}
               </button>
             ))}
           </div>
@@ -420,11 +467,11 @@ function Step1Destination({ origin, setOrigin, destination, setDestination, onNe
           style={{
             ...inputStyle,
             paddingLeft: 40,
-            border: `1px solid ${destination ? TEAL : HAIRLINE}`,
+            border: `1px solid ${destination ? PURPLE : HAIRLINE}`,
           }}
         />
         <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }}>
-          <Icon name="search" size={16} color={destination ? TEAL : MUTED} />
+          <Icon name="search" size={16} color={destination ? PURPLE : MUTED} />
         </div>
       </div>
 
@@ -602,12 +649,12 @@ function Step3Purpose({ purpose, setPurpose, priorities, togglePriority, notes, 
               key={p.id}
               onClick={() => setPurpose(p.id)}
               style={{
-                background: active ? TEAL : '#fff',
-                border: `1.5px solid ${active ? TEAL : HAIRLINE}`,
+                background: active ? PURPLE : '#fff',
+                border: `1.5px solid ${active ? PURPLE : HAIRLINE}`,
                 borderRadius: 20, padding: '8px 18px',
                 color: active ? '#fff' : INK2,
                 fontSize: 13, fontWeight: 600,
-                boxShadow: active ? SHADOW_TEAL : SHADOW_CARD, transition: 'all 0.15s',
+                boxShadow: active ? SHADOW_PURPLE : SHADOW_CARD, transition: 'all 0.15s',
               }}
             >
               {p.label}
@@ -625,12 +672,12 @@ function Step3Purpose({ purpose, setPurpose, priorities, togglePriority, notes, 
               key={pr}
               onClick={() => togglePriority(pr)}
               style={{
-                background: active ? TEAL : '#fff',
-                border: `1.5px solid ${active ? TEAL : HAIRLINE}`,
+                background: active ? PURPLE : '#fff',
+                border: `1.5px solid ${active ? PURPLE : HAIRLINE}`,
                 borderRadius: 20, padding: '7px 16px',
                 color: active ? '#fff' : INK2,
                 fontSize: 13, fontWeight: 600,
-                boxShadow: active ? SHADOW_TEAL : SHADOW_CARD,
+                boxShadow: active ? SHADOW_PURPLE : SHADOW_CARD,
                 transition: 'all 0.15s',
               }}
             >
@@ -694,7 +741,7 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
   return (
     <div style={{ paddingBottom: 32 }}>
       {/* Hero card */}
-      <div style={{ background: GRAD_TEAL, borderRadius: 24, padding: '20px 20px 18px', marginBottom: 16, position: 'relative', overflow: 'hidden', boxShadow: SHADOW_TEAL }}>
+      <div style={{ background: GRAD_HERO, borderRadius: 24, padding: '20px 20px 18px', marginBottom: 16, position: 'relative', overflow: 'hidden', boxShadow: SHADOW_PURPLE }}>
         <div style={{ position: 'absolute', inset: 0, background: GRAD_GLOW, pointerEvents: 'none' }} aria-hidden />
         <div style={{ position: 'absolute', right: -40, top: -40, width: 160, height: 160, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%)' }} aria-hidden />
         <div className="flex items-center" style={{ gap: 12, marginBottom: 14, position: 'relative' }}>
@@ -740,7 +787,7 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
         <Card style={{ marginBottom: 14 }}>
           <div className="flex items-center" style={{ gap: 8, marginBottom: 12 }}>
             <div style={{ width: 32, height: 32, borderRadius: 10, background: MIST, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="plane" size={16} color={TEAL} />
+              <Icon name="plane" size={16} color={PURPLE} />
             </div>
             <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>Flight Options</span>
           </div>
@@ -748,7 +795,7 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
             <div key={i} style={{ background: MIST, borderRadius: 12, padding: '10px 12px', marginBottom: i < itinerary.flight_recommendations!.length - 1 ? 8 : 0 }}>
               <div className="flex items-center" style={{ justifyContent: 'space-between', marginBottom: 3 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: INK }}>{f.airline}</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: TEAL }}>{fmt(f.price_per_pax)}<span style={{ fontSize: 11, color: MUTED }}>/pax</span></span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: PURPLE }}>{fmt(f.price_per_pax)}<span style={{ fontSize: 11, color: MUTED }}>/pax</span></span>
               </div>
               {f.booking_tip && <div style={{ fontSize: 12, color: MUTED }}>{f.booking_tip}</div>}
             </div>
@@ -760,7 +807,7 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
         <Card style={{ marginBottom: 14 }}>
           <div className="flex items-center" style={{ gap: 8, marginBottom: 10 }}>
             <div style={{ width: 32, height: 32, borderRadius: 10, background: MIST, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="car" size={16} color={TEAL} />
+              <Icon name="car" size={16} color={PURPLE} />
             </div>
             <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>Getting There</span>
           </div>
@@ -772,7 +819,7 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
             ].map((item) => (
               <div key={item.label}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: item.teal ? TEAL : INK, marginTop: 2 }}>{item.val}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: item.teal ? PURPLE : INK, marginTop: 2 }}>{item.val}</div>
               </div>
             ))}
           </div>
@@ -788,7 +835,7 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
       <Card style={{ marginBottom: 14 }}>
         <div className="flex items-center" style={{ gap: 8, marginBottom: 12 }}>
           <div style={{ width: 32, height: 32, borderRadius: 10, background: MIST, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="home2" size={16} color={TEAL} />
+              <Icon name="home2" size={16} color={PURPLE} />
           </div>
           <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>Where You'll Stay</span>
         </div>
@@ -796,7 +843,7 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
         <div style={{ fontSize: 12, color: MUTED, marginBottom: 10 }}>{itinerary.accommodation.area}</div>
         <div className="flex items-center" style={{ justifyContent: 'space-between', marginBottom: itinerary.accommodation.tip ? 10 : 12 }}>
           <span style={{ fontSize: 13, color: MUTED }}>Per night</span>
-          <span style={{ fontSize: 15, fontWeight: 700, color: TEAL }}>{fmt(itinerary.accommodation.nightly_cost)}</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: PURPLE }}>{fmt(itinerary.accommodation.nightly_cost)}</span>
         </div>
         {itinerary.accommodation.tip && (
           <div style={{ background: MIST, borderRadius: 10, padding: '8px 10px', fontSize: 12, color: INK2, marginBottom: 12 }}>
@@ -807,9 +854,9 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
           href={mapsUrl(itinerary.accommodation.name)}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: TEAL, fontWeight: 600, textDecoration: 'none' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: PURPLE, fontWeight: 600, textDecoration: 'none' }}
         >
-          <Icon name="mapPin" size={13} color={TEAL} strokeWidth={2} /> View on Maps
+          <Icon name="mapPin" size={13} color={PURPLE} strokeWidth={2} /> View on Maps
         </a>
       </Card>
 
@@ -821,12 +868,12 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
             key={d.day}
             onClick={() => setActiveDay(i)}
             style={{
-              flexShrink: 0, background: activeDay === i ? TEAL : '#fff',
-              border: `1.5px solid ${activeDay === i ? TEAL : HAIRLINE}`,
+              flexShrink: 0, background: activeDay === i ? PURPLE : '#fff',
+              border: `1.5px solid ${activeDay === i ? PURPLE : HAIRLINE}`,
               borderRadius: 20, padding: '7px 18px',
               color: activeDay === i ? '#fff' : INK2,
               fontSize: 13, fontWeight: 600,
-              boxShadow: activeDay === i ? SHADOW_TEAL : SHADOW_CARD,
+              boxShadow: activeDay === i ? SHADOW_PURPLE : SHADOW_CARD,
               transition: 'all 0.15s',
             }}
           >
@@ -861,7 +908,7 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
                       </span>
                     </div>
                     <div className="flex" style={{ gap: 14, marginBottom: place.tip ? 5 : 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: TEAL }}>{fmt(place.cost)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: PURPLE }}>{fmt(place.cost)}</span>
                       <span style={{ fontSize: 12, color: MUTED }}>⏱ {place.duration}</span>
                     </div>
                     {place.tip && (
@@ -873,9 +920,9 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
                       href={mapsUrl(place.name)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TEAL, fontWeight: 600, textDecoration: 'none' }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: PURPLE, fontWeight: 600, textDecoration: 'none' }}
                     >
-                      <Icon name="mapPin" size={12} color={TEAL} strokeWidth={2} /> Maps
+                      <Icon name="mapPin" size={12} color={PURPLE} strokeWidth={2} /> Maps
                     </a>
                   </div>
                 </div>
@@ -898,7 +945,7 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
           <div className="flex items-center" style={{ justifyContent: 'space-between' }}>
             <div className="flex items-center" style={{ gap: 8 }}>
               <div style={{ width: 32, height: 32, borderRadius: 10, background: MIST, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="chart" size={16} color={TEAL} />
+                <Icon name="chart" size={16} color={PURPLE} />
               </div>
               <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>Budget Breakdown</span>
             </div>
@@ -936,7 +983,7 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
       <Card style={{ marginBottom: 14 }}>
         <div className="flex items-center" style={{ gap: 8, marginBottom: 10 }}>
           <div style={{ width: 32, height: 32, borderRadius: 10, background: MIST, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="cards" size={16} color={TEAL} />
+                <Icon name="cards" size={16} color={PURPLE} />
           </div>
           <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>Payment Strategy</span>
         </div>
@@ -948,7 +995,7 @@ function ResultView({ itinerary, request, onPlanAnother, onViewHistory }: Result
         <Card style={{ marginBottom: 20 }}>
           <div className="flex items-center" style={{ gap: 8, marginBottom: 12 }}>
             <div style={{ width: 32, height: 32, borderRadius: 10, background: MIST, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="package" size={16} color={TEAL} />
+                <Icon name="package" size={16} color={PURPLE} />
             </div>
             <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>Packing Essentials</span>
           </div>
@@ -1024,13 +1071,13 @@ function HistoryTab({ onViewItinerary, onPlanTrip }: HistoryTabProps) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
         <div style={{ width: 64, height: 64, borderRadius: 20, background: MIST, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-          <Icon name="plane" size={28} color={TEAL} />
+          <Icon name="plane" size={28} color={PURPLE} />
         </div>
         <div style={{ fontSize: 17, fontWeight: 800, color: INK, marginBottom: 6 }}>No trips yet</div>
         <div style={{ fontSize: 14, color: MUTED, marginBottom: 28 }}>Generate your first itinerary to get started</div>
         <button
           onClick={onPlanTrip}
-          style={{ background: TEAL, border: 'none', borderRadius: 14, padding: '13px 28px', color: '#fff', fontSize: 14, fontWeight: 700, boxShadow: SHADOW_TEAL }}
+          style={{ background: PURPLE, border: 'none', borderRadius: 14, padding: '13px 28px', color: '#fff', fontSize: 14, fontWeight: 700, boxShadow: SHADOW_PURPLE }}
         >
           Plan a Trip
         </button>
@@ -1061,7 +1108,7 @@ function HistoryTab({ onViewItinerary, onPlanTrip }: HistoryTabProps) {
             <div className="flex" style={{ gap: 8 }}>
               <button
                 onClick={() => onViewItinerary(trip)}
-                style={{ flex: 1, background: TEAL, border: 'none', borderRadius: 11, padding: '9px 0', color: '#fff', fontSize: 13, fontWeight: 700, boxShadow: SHADOW_TEAL }}
+                style={{ flex: 1, background: PURPLE, border: 'none', borderRadius: 11, padding: '9px 0', color: '#fff', fontSize: 13, fontWeight: 700, boxShadow: SHADOW_PURPLE }}
               >
                 View
               </button>
@@ -1192,6 +1239,8 @@ export default function FinTravel() {
     setPhase('loading');
     try {
       const h = await authHeader();
+      // If no auth header was produced the session is missing — surface early
+      if (!h.Authorization) throw new Error('Session expired. Please sign out and sign in again.');
       const res = await fetch(`${API_BASE_URL}/api/travel/plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...h },
@@ -1209,10 +1258,12 @@ export default function FinTravel() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error ?? `Request failed (${res.status})`);
+        const msg = (err as { error?: string }).error ?? `Request failed (${res.status})`;
+        // 401 almost always means missing/wrong Supabase env vars on the server
+        throw new Error(res.status === 401 ? `Auth failed (${res.status}): check server env vars` : msg);
       }
-      const json = (await res.json()) as { itinerary: ItineraryResponse };
-      setItinerary(json.itinerary);
+      const json = (await res.json()) as { itinerary: unknown };
+      setItinerary(normalizeItinerary(json.itinerary, Number(budget)));
       setResultRequest({ destination, travelDate, days, persons, budget: Number(budget), purpose });
       setPhase('result');
     } catch (err) {
@@ -1223,7 +1274,7 @@ export default function FinTravel() {
   };
 
   const handleViewHistoryItem = (item: SavedItinerary) => {
-    setItinerary(item.itinerary);
+    setItinerary(normalizeItinerary(item.itinerary, item.budget));
     setResultRequest({
       destination: { id: '', country: item.destination_country, country_code: item.destination_country_code, city: item.destination_city },
       travelDate: item.travel_date,
@@ -1239,16 +1290,16 @@ export default function FinTravel() {
   if (phase === 'loading') {
     return (
       <div className="text-ink" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-        <div style={{ width: 72, height: 72, borderRadius: 24, background: GRAD_TEAL, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20, boxShadow: SHADOW_TEAL }}>
+        <div style={{ width: 72, height: 72, borderRadius: 24, background: GRAD_HERO, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20, boxShadow: SHADOW_PURPLE }}>
           <Icon name="plane" size={32} color="#fff" strokeWidth={1.6} />
         </div>
         <div style={{ fontSize: 20, fontWeight: 800, color: INK, marginBottom: 8, letterSpacing: -0.4 }}>Planning your trip…</div>
         <div style={{ fontSize: 14, color: MUTED, textAlign: 'center', lineHeight: 1.6, maxWidth: 260 }}>
-          Claude is crafting a personalised itinerary based on your budget and travel style.
+          Our AI is crafting a personalised itinerary based on your budget and travel style.
         </div>
         <div style={{ marginTop: 28, display: 'flex', gap: 6 }}>
-          {[0, 1, 2].map((i) => (
-            <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: TEAL, opacity: 0.3 + i * 0.25 }} />
+            {[0, 1, 2].map((i) => (
+            <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: PURPLE, opacity: 0.3 + i * 0.25 }} />
           ))}
         </div>
       </div>
@@ -1269,7 +1320,7 @@ export default function FinTravel() {
               <Icon name="arrowLeft" size={18} color={INK} />
             </button>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: TEAL, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+              <div style={{               fontSize: 11, fontWeight: 700, color: PURPLE, textTransform: 'uppercase', letterSpacing: 0.6 }}>
                 {isHistoryDetail ? 'Saved Trip' : 'FinTravel'}
               </div>
               <h1 style={{ fontSize: 22, fontWeight: 800, color: INK, letterSpacing: -0.5, margin: 0 }}>
@@ -1304,7 +1355,7 @@ export default function FinTravel() {
               <Icon name="arrowLeft" size={18} color={INK} />
             </button>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: TEAL, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+              <div style={{               fontSize: 11, fontWeight: 700, color: PURPLE, textTransform: 'uppercase', letterSpacing: 0.6 }}>
                 AI Travel Planner
               </div>
               <h1 style={{ fontSize: 26, fontWeight: 800, color: INK, letterSpacing: -0.6, margin: 0 }}>
@@ -1312,7 +1363,7 @@ export default function FinTravel() {
               </h1>
             </div>
           </div>
-          <div style={{ width: 44, height: 44, borderRadius: 14, background: GRAD_TEAL, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: SHADOW_TEAL }}>
+          <div style={{ width: 44, height: 44, borderRadius: 14, background: GRAD_HERO, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: SHADOW_PURPLE }}>
             <Icon name="plane" size={22} color="#fff" strokeWidth={1.6} />
           </div>
         </div>
